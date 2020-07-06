@@ -1,7 +1,7 @@
 
-# This file is a part of MRNIU/FreeRTOS-PortentaH7 (https://github.com/MRNIU/FreeRTOS-PortentaH7).
+# This file is a part of MRNIU/ArduinoCore-freertos (https://github.com/MRNIU/ArduinoCore-freertos).
 #
-# Makefile for MRNIU/FreeRTOS-PortentaH7.
+# Makefile for MRNIU/ArduinoCore-freertos.
 
 # 设置 make 环境
 CURR_DIR := $(shell pwd)
