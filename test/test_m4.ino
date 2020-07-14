@@ -1,5 +1,5 @@
 
-// This file is a part of MRNIU/FreeRTOS-PortentaH7 (https://github.com/MRNIU/ArduinoCore-freertos).
+// This file is a part of MRNIU/ArduinoCore-freertos (https://github.com/MRNIU/ArduinoCore-freertos).
 //
 // test_m4.ino for MRNIU/ArduinoCore-freertos.
 
