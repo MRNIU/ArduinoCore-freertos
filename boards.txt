@@ -5,6 +5,7 @@ envie_m7.build.core=arduino
 envie_m7.build.crossprefix=arm-none-eabi-
 # envie_m7.build.compiler_path={runtime.tools.arm-none-eabi-gcc.path}/bin/
 envie_m7.build.compiler_path=/usr/local/bin/
+envie_m7.build.cmsis_lib_gcc=ARMCM7
 envie_m7.arch=-DARDUINO_ARCH_STM32
 
 envie_m7.build.variant=PORTENTA_H7_M7

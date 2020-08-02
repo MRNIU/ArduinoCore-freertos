@@ -56,9 +56,6 @@ compiler.elf2hex.extra_flags=
 runtime.tools.CMSIS_5-5.6.0.path={build.core.path}/CMSIS_5-5.6.0
 compiler.arm.cmsis.c.flags="-I{runtime.tools.CMSIS_5-5.6.0.path}/CMSIS/Core/Include/" "-I{build.system.path}/Drivers/CMSIS/Device/ST/{build.series}/Include/" "-I{build.system.path}/Drivers/CMSIS/Device/ST/{build.series}/Source/Templates/gcc/" "-I{runtime.tools.CMSIS_5-5.6.0.path}/CMSIS/DSP/Include"
 compiler.arm.cmsis.ldflags="-L{runtime.tools.CMSIS_5-5.6.0.path}/CMSIS/DSP/Lib/GCC/" -l{build.cmsis_lib_gcc}
-#runtime.tools.CMSIS_5-5.4.0.path={build.core.path}/CMSIS_5-5.4.0
-#compiler.arm.cmsis.c.flags="-I{runtime.tools.CMSIS_5-5.4.0.path}/CMSIS/Core/Include/" "-I{build.system.path}/Drivers/CMSIS/Device/ST/{build.series}/Include/" "-I{build.system.path}/Drivers/CMSIS/Device/ST/{build.series}/Source/Templates/gcc/" "-I{runtime.tools.CMSIS_5-5.4.0.path}/CMSIS/DSP/Include"
-#compiler.arm.cmsis.ldflags="-L{runtime.tools.CMSIS_5-5.4.0.path}/CMSIS/DSP/Lib/GCC/" -l{build.cmsis_lib_gcc}
 
 # USB Flags
 # ---------
@@ -74,7 +71,7 @@ build.zip.pattern={recipe.size.pattern}
 # -----------------------
 
 ## Compile c files
-recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} {build.info.flags} {compiler.arm.cmsis.c.flags} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} {arch}  {build.extra_flags} {compiler.c.extra_flags} "-I{build.core.path}/api/deprecated" {includes} "-iprefix{build.core.path}" "{source_file}" -o "{object_file}"
+recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} {build.info.flags} {compiler.arm.cmsis.c.flags} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} {arch} {build.extra_flags} {compiler.c.extra_flags} "-I{build.core.path}/api/deprecated" {includes} "-iprefix{build.core.path}" "{source_file}" -o "{object_file}"
 
 ## Compile c++ files
 recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" {compiler.cpp.flags} {build.info.flags} {compiler.arm.cmsis.c.flags} -DARDUINO={runtime.ide.version} -DARDUINO_{build.board} {arch} {includes} {build.extra_flags} {compiler.cpp.extra_flags} "-I{build.core.path}/api/deprecated" "-iprefix{build.core.path}" "{source_file}" -o "{object_file}"
