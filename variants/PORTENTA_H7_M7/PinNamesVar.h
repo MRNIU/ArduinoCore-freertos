@@ -1,129 +1,50 @@
-  WL_REG_ON = PJ_1,
-  WL_HOST_WAKE = PJ_5,
-  WL_SDIO_0 = PC_8,
-  WL_SDIO_1 = PC_9,
-  WL_SDIO_2 = PC_10,
-  WL_SDIO_3 = PC_11,
-  WL_SDIO_CMD = PD_2,
-  WL_SDIO_CLK = PC_12,
-
-  // ADC internal channels
-  ADC_TEMP = 0xF0,
-  ADC_VREF = 0xF1,
-  ADC_VBAT = 0xF2,
-
-  // STDIO for console print
-#ifdef MBED_CONF_TARGET_STDIO_UART_TX
-  STDIO_UART_TX = MBED_CONF_TARGET_STDIO_UART_TX,
-#else
-  STDIO_UART_TX = PA_9,
+/* SYS_WKUP */
+#ifdef PWR_WAKEUP_PIN1
+  SYS_WKUP1 = PA_0, /* SYS_WKUP0 */
 #endif
-#ifdef MBED_CONF_TARGET_STDIO_UART_RX
-  STDIO_UART_RX = MBED_CONF_TARGET_STDIO_UART_RX,
-#else
-  STDIO_UART_RX = PA_10,
+#ifdef PWR_WAKEUP_PIN2
+  SYS_WKUP2 = PA_2, /* SYS_WKUP1 */
 #endif
-
-  //Led mappings
-  LED_RED = PK_5,  //Red
-  LED_GREEN = PK_6,  //Green
-  LED_BLUE = PK_7,  //Blue
-
-  //mbed original LED naming
-  LED1 = LED_RED,
-  LED2 = LED_GREEN,
-  LED3 = LED_BLUE,
-
-  CYBSP_BT_UART_RX = PF_6,
-  CYBSP_BT_UART_TX = PA_15,
-  CYBSP_BT_UART_RTS = PF_8,
-  CYBSP_BT_UART_CTS = PF_9,
-
-  CYBSP_BT_POWER = PJ_12,
-  CYBSP_BT_HOST_WAKE = PJ_13,
-  CYBSP_BT_DEVICE_WAKE = PJ_14,
-
-  USER_BUTTON = PC_13,
-  // Standardized button names
-  BUTTON1 = USER_BUTTON,
-  SERIAL_TX   = STDIO_UART_TX, // Virtual Com Port
-  SERIAL_RX   = STDIO_UART_RX, // Virtual Com Port
-  USBTX       = STDIO_UART_TX, // Virtual Com Port
-  USBRX       = STDIO_UART_RX, // Virtual Com Port
-  I2C_SCL     = PB_6,
-  I2C_SDA     = PB_7,
-  PWM_OUT     = PD_15,
-
-  /**** QSPI FLASH pins ****/
-  QSPI_FLASH1_IO0 = PD_11,
-  QSPI_FLASH1_IO1 = PD_12,
-  QSPI_FLASH1_IO2 = PF_7,
-  QSPI_FLASH1_IO3 = PD_13,
-  QSPI_FLASH1_SCK = PF_10,
-  QSPI_FLASH1_CSN = PG_6,
-
-  /**** USB pins ****/
-  USB_OTG_FS_DM = PA_11,
-  USB_OTG_FS_DP = PA_12,
-  USB_OTG_FS_ID = PA_10,
+#ifdef PWR_WAKEUP_PIN3
+  SYS_WKUP3 = PC_13, /* SYS_WKUP2 */
+#endif
+#ifdef PWR_WAKEUP_PIN4
+  SYS_WKUP4 = PI_8, /* SYS_WKUP3 */
+#endif
+#ifdef PWR_WAKEUP_PIN5
+  SYS_WKUP5 = PI_11, /* SYS_WKUP4 */
+#endif
+#ifdef PWR_WAKEUP_PIN6
+  SYS_WKUP6 = PC_1, /* SYS_WKUP5 */
+#endif
+#ifdef PWR_WAKEUP_PIN7
+  SYS_WKUP7 = NC,
+#endif
+#ifdef PWR_WAKEUP_PIN8
+  SYS_WKUP8 = NC,
+#endif
+/* USB */
+#ifdef USBCON
   USB_OTG_FS_SOF = PA_8,
   USB_OTG_FS_VBUS = PA_9,
-  USB_OTG_HS_DM = PB_14,
-  USB_OTG_HS_DP = PB_15,
-  USB_OTG_HS_ID = PB_12,
+  USB_OTG_FS_ID = PA_10,
+  USB_OTG_FS_DM = PA_11,
+  USB_OTG_FS_DP = PA_12,
+  USB_OTG_HS_ULPI_D0 = PA_3,
   USB_OTG_HS_SOF = PA_4,
   USB_OTG_HS_ULPI_CK = PA_5,
-  USB_OTG_HS_ULPI_D0 = PA_3,
   USB_OTG_HS_ULPI_D1 = PB_0,
   USB_OTG_HS_ULPI_D2 = PB_1,
+  USB_OTG_HS_ULPI_D7 = PB_5,
   USB_OTG_HS_ULPI_D3 = PB_10,
   USB_OTG_HS_ULPI_D4 = PB_11,
+  USB_OTG_HS_ID = PB_12,
   USB_OTG_HS_ULPI_D5 = PB_12,
   USB_OTG_HS_ULPI_D6 = PB_13,
-  USB_OTG_HS_ULPI_D7 = PB_5,
+  USB_OTG_HS_VBUS = PB_13,
+  USB_OTG_HS_DM = PB_14,
+  USB_OTG_HS_DP = PB_15,
+  USB_OTG_HS_ULPI_STP = PC_0,
   USB_OTG_HS_ULPI_DIR = PC_2,
   USB_OTG_HS_ULPI_NXT = PC_3,
-  USB_OTG_HS_ULPI_STP = PC_0,
-  USB_OTG_HS_VBUS = PB_13,
-
-  /**** ETHERNET pins ****/
-  ETH_MDC = PC_1,
-  ETH_MDIO = PA_2,
-  ETH_CRS_DV = PA_7,
-  ETH_REF_CLK = PA_1,
-  ETH_RXD0 = PC_4,
-  ETH_RXD1 = PC_5,
-  ETH_RX_CLK = PA_1,
-  ETH_TXD0 = PG_13,
-  ETH_TXD1 = PG_12,
-  ETH_TX_EN = PG_11,
-
-  /**** OSCILLATOR pins ****/
-  RCC_OSC32_IN = PC_14,
-  RCC_OSC32_OUT = PC_15,
-  RCC_OSC_IN = PH_0,
-  RCC_OSC_OUT = PH_1,
-
-  /**** DEBUG pins ****/
-  SYS_JTCK_SWCLK = PA_14,
-  SYS_JTDI = PA_15,
-  SYS_JTDO_SWO = PB_3,
-  SYS_JTMS_SWDIO = PA_13,
-  SYS_JTRST = PB_4,
-  SYS_PVD_IN = PB_7,
-  SYS_TRACECLK = PE_2,
-  SYS_TRACED0 = PE_3,
-  SYS_TRACED0_ALT0 = PC_1,
-  SYS_TRACED0_ALT1 = PG_13,
-  SYS_TRACED1 = PE_4,
-  SYS_TRACED1_ALT0 = PC_8,
-  SYS_TRACED1_ALT1 = PG_14,
-  SYS_TRACED2 = PE_5,
-  SYS_TRACED2_ALT0 = PD_2,
-  SYS_TRACED3 = PE_6,
-  SYS_TRACED3_ALT0 = PC_12,
-  SYS_TRGIO = PC_7,
-  SYS_WKUP0 = PA_0,
-  SYS_WKUP1 = PA_2,
-  SYS_WKUP2 = PC_13,
-  SYS_WKUP5 = PC_1,
+#endif

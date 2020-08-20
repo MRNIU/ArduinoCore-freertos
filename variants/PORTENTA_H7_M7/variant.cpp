@@ -1,11 +1,21 @@
-#include "Arduino.h"
+/*
+ *******************************************************************************
+ * Copyright (c) 2019, STMicroelectronics
+ * All rights reserved.
+ *
+ * This software component is licensed by ST under BSD 3-Clause license,
+ * the "License"; You may not use this file except in compliance with the
+ * License. You may obtain a copy of the License at:
+ *                        opensource.org/licenses/BSD-3-Clause
+ *
+ *******************************************************************************
+ */
+
 #include "pins_arduino.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-RTC_HandleTypeDef RTCHandle;
 
 // Pin number
 const PinName digitalPin[] = {
@@ -29,12 +39,12 @@ const PinName digitalPin[] = {
   PA_9,     // D14
 
   // A0 - A7
-  PA_0_C_ALT2,    // A0    ADC2_INP0
-  PA_1_C_ALT0,    // A1    ADC2_INP1
-  PC_2_C_ALT0,    // A2    ADC3_INP0
-  PC_3_C,         // A3    ADC3_INP1
-  PC_2_ALT0,     // A4    ADC1_INP12
-  PC_3_ALT2,     // A5    ADC2_INP13
+  PA_0,    // A0    ADC2_INP0
+  PA_1,    // A1    ADC2_INP1
+  PC_2,    // A2    ADC3_INP0
+  PC_3,         // A3    ADC3_INP1
+  PC_2,     // A4    ADC1_INP12
+  PC_3,     // A5    ADC2_INP13
   PA_4,          // A6    ADC1_INP18
 
   // LEDS
@@ -44,12 +54,12 @@ const PinName digitalPin[] = {
 };
 
 const uint32_t analogInputPin[] = {
-  PA_0_C_ALT2,   // A0    ADC2_INP0
-  PA_1_C_ALT0,   // A1    ADC2_INP1
-  PC_2_C_ALT0,   // A2    ADC3_INP0
-  PC_3_C,        // A3    ADC3_INP1
-  PC_2_ALT0,     // A4    ADC1_INP12
-  PC_3_ALT2,     // A5    ADC2_INP13
+  PA_0,   // A0    ADC2_INP0
+  PA_1,   // A1    ADC2_INP1
+  PC_2,   // A2    ADC3_INP0
+  PC_3,        // A3    ADC3_INP1
+  PC_2,     // A4    ADC1_INP12
+  PC_3,     // A5    ADC2_INP13
   PA_4,          // A6    ADC1_INP18
 };
 
@@ -58,23 +68,45 @@ const uint32_t analogInputPin[] = {
 #endif
 
 // ----------------------------------------------------------------------------
-
-void initVariant() {
-  RTCHandle.Instance = RTC;
-  // Turn off LED from bootloader
-  pinMode(PK_6, OUTPUT);
-  digitalWrite(PK_6, HIGH);
-
-  // configure analog mux to split Pxy and Pxy_C
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA0, SYSCFG_SWITCH_PA0_OPEN);
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PA1, SYSCFG_SWITCH_PA1_OPEN);
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC2, SYSCFG_SWITCH_PC2_OPEN);
-  HAL_SYSCFG_AnalogSwitchConfig(SYSCFG_SWITCH_PC3, SYSCFG_SWITCH_PC3_OPEN);
-}
+#include "Arduino.h"
 
 #ifdef __cplusplus
 extern "C" {
 #endif
+
+#include "FreeRTOS.h"
+#include "task.h"
+#include "cmsis_os.h"
+
+osThreadId_t cm7_task_handle;
+const osThreadAttr_t cm7_task_attributes = {
+  .name = "cm7_task",
+  .stack_size = (uint32_t)128 * 4,
+  .priority = (osPriority_t) osPriorityHigh
+};
+
+void StartM7DefaultTask(void *argument);
+
+void StartM7DefaultTask(void *argument) {
+  HAL_RCCEx_EnableBootCore(RCC_BOOT_C2);
+  setup();
+  for (;;) {
+#if defined(CORE_CALLBACK)
+    CoreCallback();
+#endif
+    loop();
+    serialEventRun();
+  }
+}
+
+void initVariant() {
+/* Configure the System clock source, PLL Multiplier and Divider factors,
+     AHB/APBx prescalers and Flash settings */
+  SystemClock_Config();
+  SystemCoreClockUpdate();
+  cm7_task_handle = osThreadNew(StartM7DefaultTask, NULL, &cm7_task_attributes);
+  return;
+}
 
 /**
   * @brief  System Clock Configuration

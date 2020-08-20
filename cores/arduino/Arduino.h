@@ -25,9 +25,9 @@
                      + __GNUC_MINOR__ * 100 \
                      + __GNUC_PATCHLEVEL__)
 #endif
-// #if GCC_VERSION < 60300
-//   #error "GCC version 6.3 or higher is required"
-// #endif
+#if GCC_VERSION < 60300
+  #error "GCC version 6.3 or higher is required"
+#endif
 
 #ifdef __IN_ECLIPSE__
   #include "SrcWrapper.h"
@@ -54,5 +54,6 @@ void yield(void);
 
 // Include pins variant
 #include "pins_arduino.h"
+#include "cmsis_os.h"
 
 #endif // Arduino_h
