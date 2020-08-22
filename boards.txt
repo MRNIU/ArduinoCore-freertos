@@ -1672,14 +1672,14 @@ GenH7.menu.pnum.PORTENTA_H7_M4.compiler.cpp.extra_flags={build.variant.path}/cxx
 
 # Portenta H7 M7 Core
 GenH7.menu.pnum.PORTENTA_H7_M7=Arduino Portenta H7 (M7 core)
-GenH7.menu.pnum.PORTENTA_H7_M4.build.flags.fp=-mfpu=fpv5-d16 -mfloat-abi=softfp
+GenH7.menu.pnum.PORTENTA_H7_M7.build.flags.fp=-mfpu=fpv5-d16 -mfloat-abi=softfp
 GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_size=786432
 GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_data_size=523624
 GenH7.menu.pnum.PORTENTA_H7_M7.build.board=PORTENTA_H7_M7
 GenH7.menu.pnum.PORTENTA_H7_M7.build.product_line=STM32H747xx
 GenH7.menu.pnum.PORTENTA_H7_M7.build.variant=PORTENTA_H7_M7
 
-GenH7.menu.pnum.PORTENTA_H7_M7.compiler.h7.extra_defines={build.variant.path}/defines.txt
+GenH7.menu.pnum.PORTENTA_H7_M7.compiler.extra_defines={build.variant.path}/defines.txt
 GenH7.menu.pnum.PORTENTA_H7_M7.compiler.c.elf.extra_flags={build.variant.path}/ldflags.txt
 GenH7.menu.pnum.PORTENTA_H7_M7.compiler.c.extra_flags={build.variant.path}/cflags.txt
 GenH7.menu.pnum.PORTENTA_H7_M7.compiler.cpp.extra_flags={build.variant.path}/cxxflags.txt
