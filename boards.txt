@@ -1659,8 +1659,6 @@ GenH7.menu.pnum.DAISY_SEED.build.variant=DAISY_SEED
 GenH7.menu.pnum.PORTENTA_H7_M4=Arduino Portenta H7 (M4 core)
 GenH7.menu.pnum.PORTENTA_H7_M4.mcu=cortex-m4
 GenH7.menu.pnum.PORTENTA_H7_M4.build.flags.fp=-mfpu=fpv4-sp-d16 -mfloat-abi=softfp
-GenH7.menu.pnum.PORTENTA_H7_M4.upload.maximum_size=1048576
-GenH7.menu.pnum.PORTENTA_H7_M4.upload.maximum_data_size=294248
 GenH7.menu.pnum.PORTENTA_H7_M4.build.board=PORTENTA_H7_M4
 GenH7.menu.pnum.PORTENTA_H7_M4.build.product_line=STM32H747xx
 GenH7.menu.pnum.PORTENTA_H7_M4.build.variant=PORTENTA_H7_M4
@@ -1670,11 +1668,26 @@ GenH7.menu.pnum.PORTENTA_H7_M4.compiler.c.elf.extra_flags={build.variant.path}/l
 GenH7.menu.pnum.PORTENTA_H7_M4.compiler.c.extra_flags={build.variant.path}/cflags.txt
 GenH7.menu.pnum.PORTENTA_H7_M4.compiler.cpp.extra_flags={build.variant.path}/cxxflags.txt
 
+GenH7.menu.pnum.PORTENTA_H7_M4.vid.0=0x2341
+GenH7.menu.pnum.PORTENTA_H7_M4.pid.0=0x005b
+GenH7.menu.pnum.PORTENTA_H7_M4.build.vid=0x2341
+GenH7.menu.pnum.PORTENTA_H7_M4.build.pid=0x005b
+
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.tool=dfu-util
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.vid=0x2341
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.pid=0x035b
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.protocol=
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.address=0x08100000
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.interface=0
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.use_1200bps_touch=true
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.wait_for_upload_port=true
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.native_usb=true
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.maximum_size=1048576
+GenH7.menu.pnum.PORTENTA_H7_M4.upload.maximum_data_size=294248
+
 # Portenta H7 M7 Core
 GenH7.menu.pnum.PORTENTA_H7_M7=Arduino Portenta H7 (M7 core)
 GenH7.menu.pnum.PORTENTA_H7_M7.build.flags.fp=-mfpu=fpv5-d16 -mfloat-abi=softfp
-GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_size=786432
-GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_data_size=523624
 GenH7.menu.pnum.PORTENTA_H7_M7.build.board=PORTENTA_H7_M7
 GenH7.menu.pnum.PORTENTA_H7_M7.build.product_line=STM32H747xx
 GenH7.menu.pnum.PORTENTA_H7_M7.build.variant=PORTENTA_H7_M7
@@ -1691,6 +1704,18 @@ GenH7.menu.pnum.PORTENTA_H7_M7.compiler.h7.pid.1=0x035b
 GenH7.menu.pnum.PORTENTA_H7_M7.compiler.h7.vid.2=0x2341
 GenH7.menu.pnum.PORTENTA_H7_M7.compiler.h7.pid.2=0x045b
 
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.tool=dfu-util
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.vid=0x2341
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.pid=0x035b
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.protocol=
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.address=0x08040000
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.interface=0
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.use_1200bps_touch=true
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.wait_for_upload_port=true
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.native_usb=true
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_size=786432
+GenH7.menu.pnum.PORTENTA_H7_M7.upload.maximum_data_size=523624
+
 # Upload menu
 GenH7.menu.upload_method.swdMethod=STM32CubeProgrammer (SWD)
 GenH7.menu.upload_method.swdMethod.upload.protocol=0
@@ -1706,6 +1731,11 @@ GenH7.menu.upload_method.dfuMethod=STM32CubeProgrammer (DFU)
 GenH7.menu.upload_method.dfuMethod.upload.protocol=2
 GenH7.menu.upload_method.dfuMethod.upload.options=-g
 GenH7.menu.upload_method.dfuMethod.upload.tool=stm32CubeProg
+
+GenH7.menu.upload_method.dfu-util=dfu-util
+GenH7.menu.upload_method.dfu-util.upload.protocol=
+GenH7.menu.upload_method.dfu-util.upload.options=-g
+GenH7.menu.upload_method.dfu-util.upload.tool=dfu-util
 
 ################################################################################
 # Generic L0
