@@ -94,6 +94,9 @@ void StartM4DefaultTask(void *argument) {
 }
 
 void initVariant() {
+  SystemClock_Config();
+  // Update the SystemCoreClock variable.
+  SystemCoreClockUpdate();
   cm4_task_handle = osThreadNew(StartM4DefaultTask, NULL, &cm4_task_attributes);
   return;
 }
@@ -105,6 +108,7 @@ void initVariant() {
   */
 WEAK void SystemClock_Config(void)
 {
+  __HAL_RCC_HSEM_CLK_ENABLE();
 }
 
 #ifdef __cplusplus

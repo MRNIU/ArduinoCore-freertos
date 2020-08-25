@@ -88,7 +88,6 @@ const osThreadAttr_t cm7_task_attributes = {
 void StartM7DefaultTask(void *argument);
 
 void StartM7DefaultTask(void *argument) {
-  HAL_RCCEx_EnableBootCore(RCC_BOOT_C2);
   setup();
   for (;;) {
 #if defined(CORE_CALLBACK)
@@ -105,6 +104,7 @@ void initVariant() {
   SystemClock_Config();
   SystemCoreClockUpdate();
   cm7_task_handle = osThreadNew(StartM7DefaultTask, NULL, &cm7_task_attributes);
+  HAL_RCCEx_EnableBootCore(RCC_BOOT_C2);
   return;
 }
 

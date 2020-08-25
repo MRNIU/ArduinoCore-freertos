@@ -54,5 +54,6 @@ void yield(void);
 
 // Include pins variant
 #include "pins_arduino.h"
+#include "cmsis_os.h"
 
 #endif // Arduino_h
