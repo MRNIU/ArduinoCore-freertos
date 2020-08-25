@@ -3,7 +3,6 @@
 #
 # Makefile for MRNIU/ArduinoCore-freertos.
 
-# 设置 make 环境
 CURR_DIR := $(shell pwd)
 ROOT_DIR := $(CURR_DIR)
 
@@ -15,8 +14,9 @@ default:
 
 .PHONY: all
 all: $(SUB_DIR)
-	@if [ $(MCU) = "" ]; then\
+	@if [ "$(MCU)" = "" ]; then\
         echo "Please specify M4 or M7";\
+        exit 1;\
     fi
 	@echo Entry $(CURR_DIR)
 	@for subdir in $(SUB_DIR); \
@@ -36,7 +36,6 @@ upload:
 	$(DFU) $(DFU_FLAG)
 	@echo Done.
 
-# 删除源码外的所有文件
 .PHONY: clean
 clean:
 	@echo Entry $(CURR_DIR)

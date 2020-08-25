@@ -8,6 +8,14 @@ ROOT_DIR := $(CURR_DIR)/..
 include $(ROOT_DIR)/Makefile.env
 
 exclude_dirs :=
+
+ifeq ($(MCU),M4)
+	exclude_dirs += CM7
+endif
+ifeq ($(MCU),M7)
+	exclude_dirs += CM4
+endif
+
 subdirs := $(shell find . -maxdepth 1 -type d)
 subdirs := $(basename $(patsubst ./%, %, $(subdirs)))
 subdirs := $(filter-out $(exclude_dirs), $(subdirs))
