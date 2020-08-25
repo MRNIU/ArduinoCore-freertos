@@ -12,7 +12,7 @@
   * This software component is licensed by ST under Ultimate Liberty license
   * SLA0044, the "License"; You may not use this file except in compliance with
   * the License. You may obtain a copy of the License at:
-  *                      www.st.com/SLA0044
+  *                      http://www.st.com/SLA0044
   *
   ******************************************************************************
   */
@@ -82,7 +82,8 @@ extern "C" {
 typedef enum {
   HID_IDLE = 0,
   HID_BUSY,
-} HID_StateTypeDef;
+}
+HID_StateTypeDef;
 
 
 typedef struct {
@@ -91,7 +92,8 @@ typedef struct {
   uint32_t             AltSetting;
   HID_StateTypeDef     Mousestate;
   HID_StateTypeDef     Keyboardstate;
-} USBD_HID_HandleTypeDef;
+}
+USBD_HID_HandleTypeDef;
 /**
   * @}
   */

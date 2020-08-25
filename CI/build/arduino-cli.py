@@ -4,7 +4,6 @@ import concurrent.futures
 from datetime import timedelta
 import json
 import os
-from packaging import version
 import re
 import shutil
 import subprocess
@@ -53,8 +52,6 @@ maintainer = maintainer_default
 arch = arch_default
 arduino_platform = arduino_platform_default
 arduino_cli = ""
-arduino_cli_default_version = "0.10.0"
-arduino_cli_version = arduino_cli_default_version
 
 # List
 sketch_list = []
@@ -120,8 +117,9 @@ def create_output_log_tree():
         file.write(build_separator + "\n")
     # Folders
     for board in board_fqbn:
-        createFolder(os.path.join(output_dir, board, bin_dir))
         createFolder(os.path.join(output_dir, board))
+        if args.bin:
+            createFolder(os.path.join(output_dir, board, bin_dir))
         createFolder(os.path.join(build_output_dir, board))
 
 
@@ -154,15 +152,12 @@ def create_config():
 
 def check_config():
     global arduino_cli
-    global arduino_cli_version
     global arduino_cli_path
     global sketches_path_list
     global build_output_dir
     global root_output_dir
     global output_dir
     global log_file
-    global stm32_url
-
     if args.ci is False:
         if os.path.isfile(path_config_filename):
             try:
@@ -200,67 +195,35 @@ def check_config():
 
     try:
         output = subprocess.check_output(
-            [arduino_cli, "version"], stderr=subprocess.STDOUT,
-        )
-    except subprocess.CalledProcessError as e:
-        print('"' + " ".join(e.cmd) + '" failed with code: {}!'.format(e.returncode))
-        print(e.stdout.decode("utf-8"))
-        quit(e.returncode)
-    else:
-        res = re.match(r".*Version:\s+(\d+\.\d+\.\d+).*", output.decode("utf-8"))
-        if res:
-            arduino_cli_version = res.group(1)
-            print("Arduino CLI version used: " + arduino_cli_version)
-        else:
-            print(
-                "Unable to define Arduino CLI version, use default: "
-                + arduino_cli_default_version
-            )
-
-    if args.url:
-        stm32_url = args.url
-
-    try:
-        output = subprocess.check_output(
             [arduino_cli, "core", "search", "stm32", "--additional-urls", stm32_url],
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.DEVNULL,
         )
-    except subprocess.CalledProcessError as e:
-        print('"' + " ".join(e.cmd) + '" failed with code: {}!'.format(e.returncode))
-        print(e.stdout.decode("utf-8"))
-        quit(e.returncode)
-    else:
         if arduino_platform not in output.decode("utf-8"):
-            print(arduino_platform + " is not installed!")
-            quit(1)
+            raise subprocess.CalledProcessError(1, "re")
         # Add core and library path to sketches_path_list
         try:
             output = subprocess.check_output(
                 [arduino_cli, "config", "dump", "--format", "json"],
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.DEVNULL,
             ).decode("utf-8")
-        except subprocess.CalledProcessError as e:
-            print(
-                '"' + " ".join(e.cmd) + '" failed with code: {}!'.format(e.returncode)
-            )
-            print(e.stdout.decode("utf-8"))
-            quit(e.returncode)
-        else:
             cli_config = json.loads(output)
             if cli_config is not None:
                 if cli_config["directories"]["data"] is not None:
                     sketches_path_list.append(cli_config["directories"]["data"])
                 else:
-                    print("No data directory")
-                    quit(1)
+                    raise subprocess.CalledProcessError(3, "No data directory")
                 if cli_config["directories"]["user"] is not None:
                     sketches_path_list.append(cli_config["directories"]["user"])
                 else:
-                    print("No user directory!")
-                    quit(1)
+                    raise subprocess.CalledProcessError(2, "No user directory")
             else:
-                print("No arduino-cli config!")
-                quit(1)
+                raise subprocess.CalledProcessError(1, "No fqbn")
+        except subprocess.CalledProcessError:
+            print("No arduino-cli config!")
+            quit()
+    except subprocess.CalledProcessError:
+        print(arduino_platform + " is not installed!")
+        quit()
 
 
 def load_core_config():
@@ -403,7 +366,7 @@ def manage_inos():
                     break
             else:
                 print("Sketch {} path does not exist!".format(args.ino))
-                quit(1)
+                quit()
     # Sketches listed in a file
     elif args.file:
         assert os.path.exists(args.file), "Sketches list file does not exist"
@@ -434,7 +397,7 @@ def manage_inos():
         sketch_list.append(sketch_default)
     if len(sketch_list) == 0:
         print("No sketch to build for " + arduino_platform + "!")
-        quit(1)
+        quit()
 
 
 # Find all .ino files and save directory
@@ -466,41 +429,32 @@ def find_board():
     try:
         output = subprocess.check_output(
             [arduino_cli, "board", "listall", "--format", "json"],
-            stderr=subprocess.STDOUT,
+            stderr=subprocess.DEVNULL,
         ).decode("utf-8")
-    except subprocess.CalledProcessError as e:
-        print('"' + " ".join(e.cmd) + '" failed with code: {}!'.format(e.returncode))
-        print(e.stdout.decode("utf-8"))
-        quit(e.returncode)
-    else:
         boards_list = json.loads(output)
         if boards_list is not None:
             for board in boards_list["boards"]:
                 if arduino_platform in board["FQBN"]:
                     fqbn_list_tmp.append(board["FQBN"])
-        if not len(fqbn_list_tmp):
-            print("No boards found for " + arduino_platform)
-            quit(1)
+            if not len(fqbn_list_tmp):
+                raise subprocess.CalledProcessError(2, "No fqbn")
+        else:
+            raise subprocess.CalledProcessError(1, "No fqbn")
+    except subprocess.CalledProcessError:
+        print("No fqbn found for " + arduino_platform + "!")
+        quit()
 
     # For STM32 core, pnum is requested
     for fqbn in fqbn_list_tmp:
         try:
             output = subprocess.check_output(
                 [arduino_cli, "board", "details", "--format", "json", fqbn],
-                stderr=subprocess.STDOUT,
+                stderr=subprocess.DEVNULL,
             ).decode("utf-8")
-        except subprocess.CalledProcessError as e:
-            print(
-                '"' + " ".join(e.cmd) + '" failed with code: {}!'.format(e.returncode)
-            )
-            print(e.stdout.decode("utf-8"))
-            quit(e.returncode)
-        else:
             board_detail = json.loads(output)
             if board_detail is not None:
                 if "config_options" not in board_detail:
-                    print("No config_options found for " + fqbn)
-                    quit(1)
+                    raise subprocess.CalledProcessError(3, "No config_options")
                 for option in board_detail["config_options"]:
                     if option["option"] == "pnum":
                         for value in option["values"]:
@@ -512,12 +466,14 @@ def find_board():
                             )
                     break
             else:
-                print('No detail found for:"' + fqbn + '"!')
+                raise subprocess.CalledProcessError(1, "No fqbn")
+        except subprocess.CalledProcessError as e:
+            print("No fqbn detail found for " + e.cmd + "!")
     if board_found:
         board_fqbn = collections.OrderedDict(sorted(board_found.items()))
     else:
         print("No board found for " + arduino_platform + "!")
-        quit(1)
+        quit()
 
 
 # Check the status
@@ -528,12 +484,14 @@ def check_status(status, build_conf, boardKo):
 
     if status[1] == 0:
         result = "\033[32msucceeded\033[0m"
+        if args.bin:
+            bin_copy(build_conf[0], sketch_name)
         nb_build_passed += 1
     elif status[1] == 1:
         # Check if failed due to a region overflowed
         logFile = os.path.join(build_conf[3], sketch_name + ".log")
         # error or fatal error
-        error_pattern = re.compile(r":\d+:\d+:\s.*error:\s|^Error:")
+        error_pattern = re.compile(r":\d+:\d+:\s.*error:\s")
         ld_pattern = re.compile("arm-none-eabi/bin/ld:")
         overflow_pattern = re.compile(
             r"(will not fit in |section .+ is not within )?region( .+ overflowed by [\d]+ bytes)?"
@@ -556,6 +514,8 @@ def check_status(status, build_conf, boardKo):
         else:
             # else consider it succeeded
             result = "\033[32msucceeded*\033[0m"
+            if args.bin:
+                empty_bin(build_conf[0], sketch_name)
             nb_build_passed += 1
     else:
         result = "\033[31merror\033[0m"
@@ -685,6 +645,34 @@ def log_final_result():
     print(output_dir)
 
 
+# Create an empty binary
+def empty_bin(board_name, sketch_name):
+    empty_path = os.path.abspath(os.path.join(output_dir, board_name, bin_dir))
+    createFolder(empty_path)
+    empty_file = os.path.join(
+        empty_path, sketch_name + "_COULD_NOT_FIT_IN_THIS_BOARD.bin"
+    )
+    try:
+        f = open(empty_file, "w")
+    except IOError:
+        print("Cannot create empty binary: ", empty_file)
+    else:
+        f.close()
+
+
+# Create a "bin" directory for each board and copy all binary files
+# from the builder output directory into it
+def bin_copy(board_name, sketch_name):
+    try:
+        shutil.copy(
+            os.path.join(build_output_dir, board_name, sketch_name + ".bin"),
+            os.path.abspath(os.path.join(output_dir, board_name, bin_dir)),
+        )
+    except OSError as e:
+        print("Cannot copy the binary from the arduino-cli output: " + e.strerror)
+        raise
+
+
 # Set up specific options to customise arduino builder command
 def get_fqbn(b_name):
     if b_name in board_custom_fqbn and board_custom_fqbn[b_name]:
@@ -708,12 +696,8 @@ def genBasicCommand(b_name):
     cmd.append(build_output_cache_dir)
     if args.verbose:
         cmd.append("--verbose")
-    if version.parse(arduino_cli_version) <= version.parse(arduino_cli_default_version):
-        cmd.append("--output")
-        cmd.append(os.path.join(output_dir, b_name, bin_dir, "dummy_sketch"))
-    else:
-        cmd.append("--output-dir")
-        cmd.append(os.path.join(output_dir, b_name, bin_dir))
+    cmd.append("-o")
+    cmd.append(os.path.join(build_output_dir, b_name, "sketch"))
     cmd.append("--fqbn")
     cmd.append(get_fqbn(b_name))
     cmd.append("dummy_sketch")
@@ -743,9 +727,6 @@ def build_config(sketch, boardSkipped):
 
     for idx in reversed(range(len(build_conf_list))):
         build_conf_list[idx][4][-1] = sketch
-        build_conf_list[idx][4][-4] = build_conf_list[idx][4][-4].replace(
-            "dummy_sketch", os.path.basename(sketch)
-        )
         if na_sketch_pattern:
             if build_conf_list[idx][0] in na_sketch_pattern:
                 for pattern in na_sketch_pattern[build_conf_list[idx][0]]:
@@ -880,16 +861,11 @@ parser.add_argument(
 )
 
 parser.add_argument(
-    "-u", "--url", metavar="<string>", help="additional URL for the board manager\
-    Default url : "
-    + stm32_url,
-)
-
-parser.add_argument(
     "-v", "--verbose", help="enable arduino-cli verbose mode", action="store_true"
 )
 
 g1 = parser.add_mutually_exclusive_group()
+g1.add_argument("--bin", help="save binaries", action="store_true")
 g1.add_argument("--ci", help="custom configuration for CI build", action="store_true")
 
 # Sketch options

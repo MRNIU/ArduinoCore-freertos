@@ -65,48 +65,21 @@ EndBSPDependencies */
   * @{
   */
 
+
 /* USB Mass storage Page 0 Inquiry Data */
-uint8_t MSC_Page00_Inquiry_Data[LENGTH_INQUIRY_PAGE00] =
+const uint8_t  MSC_Page00_Inquiry_Data[] =
 {
   0x00,
   0x00,
   0x00,
   (LENGTH_INQUIRY_PAGE00 - 4U),
   0x00,
-  0x80
-};
-
-/* USB Mass storage VPD Page 0x80 Inquiry Data for Unit Serial Number */
-uint8_t MSC_Page80_Inquiry_Data[LENGTH_INQUIRY_PAGE80] =
-{
-  0x00,
   0x80,
-  0x00,
-  LENGTH_INQUIRY_PAGE80,
-  0x20,     /* Put Product Serial number */
-  0x20,
-  0x20,
-  0x20
- };
-
-/* USB Mass storage sense 6 Data */
-uint8_t MSC_Mode_Sense6_data[MODE_SENSE6_LEN] =
+  0x83
+};
+/* USB Mass storage sense 6  Data */
+const uint8_t  MSC_Mode_Sense6_data[] =
 {
-  0x22,
-  0x00,
-  0x00,
-  0x00,
-  0x08,
-  0x12,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
   0x00,
   0x00,
   0x00,
@@ -116,32 +89,11 @@ uint8_t MSC_Mode_Sense6_data[MODE_SENSE6_LEN] =
   0x00,
   0x00
 };
-
-
 /* USB Mass storage sense 10  Data */
-uint8_t MSC_Mode_Sense10_data[MODE_SENSE10_LEN] =
+const uint8_t  MSC_Mode_Sense10_data[] =
 {
   0x00,
-  0x26,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x08,
-  0x12,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
-  0x00,
+  0x06,
   0x00,
   0x00,
   0x00,

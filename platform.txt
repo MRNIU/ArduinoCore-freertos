@@ -1,9 +1,15 @@
-name=ArduinoCore-FreeRTOS
-version=0.0.1(beta)
+# STM32 ARM Core and platform.
+# ------------------------------
+#
+# For more info:
+# https://github.com/arduino/Arduino/wiki/Arduino-IDE-1.5-3rd-party-Hardware-specification
+
+name=STM32 Boards (selected from submenu)
+version=1.0.0
 
 # STM compile variables
 # ----------------------
-compiler.stm.extra_include="-I{build.source.path}" "-I{build.core.path}/avr" "-I{build.core.path}/stm32" "-I{build.core.path}/stm32/LL" "-I{build.core.path}/stm32/usb" "-I{build.core.path}/stm32/OpenAMP" "-I{build.core.path}/stm32/usb/hid" "-I{build.core.path}/stm32/usb/cdc" "-I{build.system.path}/Drivers/{build.series}_HAL_Driver/Inc" "-I{build.system.path}/Drivers/{build.series}_HAL_Driver/Src" "-I{build.system.path}/{build.series}" "-I{build.system.path}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc" "-I{build.system.path}/Middlewares/ST/STM32_USB_Device_Library/Core/Src" "-I{build.core.path}/stm32/FreeRTOS/include" "-I{build.variant.path}" {build.virtio_extra_include}
+compiler.stm.extra_include="-I{build.source.path}" "-I{build.core.path}/avr" "-I{build.core.path}/stm32" "-I{build.core.path}/stm32/LL" "-I{build.core.path}/stm32/usb" "-I{build.core.path}/stm32/OpenAMP" "-I{build.core.path}/stm32/usb/hid" "-I{build.core.path}/stm32/usb/cdc" "-I{build.system.path}/Drivers/{build.series}_HAL_Driver/Inc" "-I{build.system.path}/Drivers/{build.series}_HAL_Driver/Src" "-I{build.system.path}/{build.series}" "-I{build.system.path}/Middlewares/ST/STM32_USB_Device_Library/Core/Inc" "-I{build.system.path}/Middlewares/ST/STM32_USB_Device_Library/Core/Src" {build.virtio_extra_include} "-I{build.core.path}/stm32/FreeRTOS/include" "-I{build.variant.path}"
 
 compiler.warning_flags=-w
 compiler.warning_flags.none=-w
@@ -49,10 +55,9 @@ build.bootloader_flags=
 build.ldscript=ldscript.ld
 
 # These can be overridden in platform.local.txt
-compiler.extra_defines=
-compiler.c.extra_flags=
-compiler.c.elf.extra_flags=
-compiler.cpp.extra_flags=
+compiler.c.extra_flags={compiler.mbed.extra_defines} {compiler.mbed.c.extra_flags}
+compiler.c.elf.extra_flags={compiler.mbed.c.elf.extra_flags}
+compiler.cpp.extra_flags={compiler.mbed.extra_defines} {compiler.mbed.cpp.extra_flags}
 compiler.cpp.std=gnu++14
 compiler.S.extra_flags={build.startup_file}
 compiler.ar.extra_flags=
@@ -111,10 +116,10 @@ recipe.hooks.prebuild.1.pattern.windows="{runtime.tools.STM32Tools.path}/tools/w
 # ---------------------
 
 ## Compile c files
-recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" "@{compiler.extra_defines}" {compiler.c.flags} {build.info.flags} "@{compiler.c.extra_flags}" {build.extra_flags} {compiler.arm.cmsis.c.flags} {includes} "{source_file}" -o "{object_file}"
+recipe.c.o.pattern="{compiler.path}{compiler.c.cmd}" {compiler.c.flags} {build.info.flags} {compiler.c.extra_flags} {build.extra_flags} {compiler.arm.cmsis.c.flags} {includes} "{source_file}" -o "{object_file}"
 
 ## Compile c++ files
-recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" "@{compiler.extra_defines}" {compiler.cpp.flags} {build.info.flags} "@{compiler.cpp.extra_flags}" {build.extra_flags} {compiler.arm.cmsis.c.flags} {includes} "{source_file}" -o "{object_file}"
+recipe.cpp.o.pattern="{compiler.path}{compiler.cpp.cmd}" {compiler.cpp.flags} {build.info.flags} {compiler.cpp.extra_flags} {build.extra_flags} {compiler.arm.cmsis.c.flags} {includes} "{source_file}" -o "{object_file}"
 
 ## Compile S files
 recipe.S.o.pattern="{compiler.path}{compiler.S.cmd}" {compiler.S.flags} {build.info.flags} {compiler.S.extra_flags} {build.extra_flags} {compiler.arm.cmsis.c.flags} {includes} "{source_file}" -o "{object_file}"
@@ -123,7 +128,7 @@ recipe.S.o.pattern="{compiler.path}{compiler.S.cmd}" {compiler.S.flags} {build.i
 recipe.ar.pattern="{compiler.path}{compiler.ar.cmd}" {compiler.ar.flags} {compiler.ar.extra_flags} "{archive_file_path}" "{object_file}"
 
 ## Combine gc-sections, archives, and objects
-recipe.c.combine.pattern="{compiler.path}{compiler.c.elf.cmd}" {compiler.c.elf.flags} "-Wl,--default-script={build.variant.path}/{build.ldscript}" "-Wl,--script={build.system.path}/ldscript.ld" "-Wl,-Map,{build.path}/{build.project_name}.map" "@{compiler.c.elf.extra_flags}" {compiler.ldflags} {compiler.arm.cmsis.ldflags} -o "{build.path}/{build.project_name}.elf" "-L{build.path}" -Wl,--start-group {object_files} {compiler.libraries.ldflags} "{archive_file_path}" -lc -Wl,--end-group -lm -lgcc -lstdc++
+recipe.c.combine.pattern="{compiler.path}{compiler.c.elf.cmd}" {compiler.c.elf.flags} "-Wl,--default-script={build.variant.path}/{build.ldscript}" "-Wl,--script={build.system.path}/ldscript.ld" "-Wl,-Map,{build.path}/{build.project_name}.map" {compiler.c.elf.extra_flags} {compiler.ldflags} {compiler.arm.cmsis.ldflags} -o "{build.path}/{build.project_name}.elf" "-L{build.path}" -Wl,--start-group {object_files} {compiler.libraries.ldflags} "{archive_file_path}" -lc -Wl,--end-group -lm -lgcc -lstdc++
 
 ## Create output (.bin file)
 recipe.objcopy.bin.pattern="{compiler.path}{compiler.objcopy.cmd}" {compiler.elf2bin.flags} {compiler.elf2bin.extra_flags} "{build.path}/{build.project_name}.elf" "{build.path}/{build.project_name}.bin"

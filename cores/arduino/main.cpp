@@ -47,9 +47,17 @@ __attribute__((constructor(101))) void premain()
  */
 int main(void)
 {
-  osKernelInitialize();  /* Call init function for freertos objects (in freertos.c) */
   initVariant();
-  /* Start scheduler */
-  osKernelStart();
+
+  setup();
+
+  for (;;) {
+#if defined(CORE_CALLBACK)
+    CoreCallback();
+#endif
+    loop();
+    serialEventRun();
+  }
+
   return 0;
 }
