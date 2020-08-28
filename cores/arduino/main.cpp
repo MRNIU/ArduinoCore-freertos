@@ -17,39 +17,36 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 */
 
-#define ARDUINO_MAIN
-#include "Arduino.h"
+#include <Arduino.h>
 
-// Force init to be called *first*, i.e. before static object allocation.
-// Otherwise, statically allocated objects that need HAL may fail.
-__attribute__((constructor(101))) void premain()
-{
+// Declared weak in Arduino.h to allow user redefinitions.
+int atexit(void (* /*func*/ )()) { return 0; }
 
-  // Required by FreeRTOS, see http://www.freertos.org/RTOS-Cortex-M3-M4.html
-#ifdef NVIC_PRIORITYGROUP_4
-  HAL_NVIC_SetPriorityGrouping(NVIC_PRIORITYGROUP_4);
-#endif
-#if (__CORTEX_M == 0x07U)
-  // Defined in CMSIS core_cm7.h
-#ifndef I_CACHE_DISABLED
-  SCB_EnableICache();
-#endif
-#ifndef D_CACHE_DISABLED
-  SCB_EnableDCache();
-#endif
-#endif
+// Weak empty variant initialization function.
+// May be redefined by variant files.
+void initVariant() __attribute__((weak));
+void initVariant() { }
 
-  init();
-}
+void setupUSB() __attribute__((weak));
+void setupUSB() { }
 
-/*
- * \brief Main entry point of Arduino application
- */
 int main(void)
 {
-  osKernelInitialize();  /* Call init function for freertos objects (in freertos.c) */
-  initVariant();
-  /* Start scheduler */
-  osKernelStart();
-  return 0;
+	init();
+
+	initVariant();
+
+#if defined(USBCON)
+	USBDevice.attach();
+#endif
+	
+	setup();
+    
+	for (;;) {
+		loop();
+		if (serialEventRun) serialEventRun();
+	}
+        
+	return 0;
 }
+

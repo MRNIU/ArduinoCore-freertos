@@ -17,8 +17,6 @@ endTransmission	KEYWORD2
 requestFrom	KEYWORD2
 onReceive	KEYWORD2
 onRequest	KEYWORD2
-setSCL	KEYWORD2
-setSDA	KEYWORD2
 
 #######################################
 # Instances (KEYWORD2)
@@ -29,3 +27,4 @@ Wire	KEYWORD2
 #######################################
 # Constants (LITERAL1)
 #######################################
+

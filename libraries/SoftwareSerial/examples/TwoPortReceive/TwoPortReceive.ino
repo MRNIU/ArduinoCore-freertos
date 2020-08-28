@@ -16,6 +16,14 @@
  * First serial device's TX attached to digital pin 10(RX), RX to pin 11(TX)
  * Second serial device's TX attached to digital pin 8(RX), RX to pin 9(TX)
 
+ Note:
+ Not all pins on the Mega and Mega 2560 support change interrupts,
+ so only the following can be used for RX:
+ 10, 11, 12, 13, 50, 51, 52, 53, 62, 63, 64, 65, 66, 67, 68, 69
+
+ Not all pins on the Leonardo support change interrupts,
+ so only the following can be used for RX:
+ 8, 9, 10, 11, 14 (MISO), 15 (SCK), 16 (MOSI).
 
  created 18 Apr. 2011
  modified 19 March 2016
@@ -75,3 +83,9 @@ void loop() {
   // blank line to separate data from the two ports:
   Serial.println();
 }
+
+
+
+
+
+

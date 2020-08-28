@@ -1,1260 +1,666 @@
-/**
-  ******************************************************************************
-  * @file    twi.c
-  * @author  WI6LABS
-  * @version V1.0.0
-  * @date    01-August-2016
-  * @brief   provide the TWI interface
-  *
-  ******************************************************************************
-  * @attention
-  *
-  * <h2><center>&copy; COPYRIGHT(c) 2016 STMicroelectronics</center></h2>
-  *
-  * Redistribution and use in source and binary forms, with or without modification,
-  * are permitted provided that the following conditions are met:
-  *   1. Redistributions of source code must retain the above copyright notice,
-  *      this list of conditions and the following disclaimer.
-  *   2. Redistributions in binary form must reproduce the above copyright notice,
-  *      this list of conditions and the following disclaimer in the documentation
-  *      and/or other materials provided with the distribution.
-  *   3. Neither the name of STMicroelectronics nor the names of its contributors
-  *      may be used to endorse or promote products derived from this software
-  *      without specific prior written permission.
-  *
-  * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
-  * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
-  * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
-  * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
-  * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
-  * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
-  * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
-  * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
-  * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-  * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-  *
-  ******************************************************************************
-  */
-#include "core_debug.h"
-#include "utility/twi.h"
-#include "PinAF_STM32F1.h"
+/*
+  twi.c - TWI/I2C library for Wiring & Arduino
+  Copyright (c) 2006 Nicholas Zambetti.  All right reserved.
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+  This library is free software; you can redistribute it and/or
+  modify it under the terms of the GNU Lesser General Public
+  License as published by the Free Software Foundation; either
+  version 2.1 of the License, or (at your option) any later version.
 
-/* Private Defines */
-/// @brief I2C timout in tick unit
-#define I2C_TIMEOUT_TICK        100
+  This library is distributed in the hope that it will be useful,
+  but WITHOUT ANY WARRANTY; without even the implied warranty of
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
 
-#define SLAVE_MODE_TRANSMIT     0
-#define SLAVE_MODE_RECEIVE      1
-#define SLAVE_MODE_LISTEN       2
+  You should have received a copy of the GNU Lesser General Public
+  License along with this library; if not, write to the Free Software
+  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
-/* Generic definition for series requiring I2C timing calculation */
-#if !defined (STM32F1xx) && !defined (STM32F2xx) && !defined (STM32F4xx) &&\
-    !defined (STM32L1xx)
-#define I2C_TIMING
-#endif
-
-#ifdef I2C_TIMING
-#ifndef I2C_VALID_TIMING_NBR
-#define I2C_VALID_TIMING_NBR          8U
-#endif
-#define I2C_ANALOG_FILTER_DELAY_MIN  50U /* ns */
-#ifndef I2C_ANALOG_FILTER_DELAY_MAX
-#define I2C_ANALOG_FILTER_DELAY_MAX 260U /* ns */
-#endif
-#ifndef I2C_USE_ANALOG_FILTER
-#define I2C_USE_ANALOG_FILTER         1U
-#endif
-#ifndef I2C_DIGITAL_FILTER_COEF
-#define I2C_DIGITAL_FILTER_COEF       0U
-#endif
-#define I2C_PRESC_MAX                16U
-#define I2C_SCLDEL_MAX               16U
-#define I2C_SDADEL_MAX               16U
-#define I2C_SCLH_MAX                256U
-#define I2C_SCLL_MAX                256U
-#define SEC2NSEC            1000000000UL
-
-typedef enum {
-  I2C_SPEED_FREQ_STANDARD,  /* 100 kHz */
-  I2C_SPEED_FREQ_FAST,      /* 400 kHz */
-  I2C_SPEED_FREQ_FAST_PLUS, /* 1 MHz */
-  I2C_SPEED_FREQ_NUMBER     /* Must be the last entry */
-} I2C_speed_freq_t;
-
-typedef struct {
-  uint32_t input_clock;      /* I2C Input clock */
-  uint32_t timing;           /* I2C timing corresponding to Input clock */
-} I2C_timing_t;
-
-static I2C_timing_t I2C_ClockTiming[I2C_SPEED_FREQ_NUMBER] = {0};
-
-typedef struct {
-  uint32_t freq;      /* Frequency in Hz */
-  uint32_t freq_min;  /* Minimum frequency in Hz */
-  uint32_t freq_max;  /* Maximum frequency in Hz */
-  uint16_t hddat_min; /* Minimum data hold time in ns */
-  uint16_t vddat_max; /* Maximum data valid time in ns */
-  uint16_t sudat_min; /* Minimum data setup time in ns */
-  uint16_t lscl_min;  /* Minimum low period of the SCL clock in ns */
-  uint16_t hscl_min;  /* Minimum high period of SCL clock in ns */
-  uint16_t trise;     /* Rise time in ns */
-  uint16_t tfall;     /* Fall time in ns */
-  uint8_t dnf;       /* Digital noise filter coefficient */
-} I2C_Charac_t;
-
-static const I2C_Charac_t I2C_Charac[] = {
-  [I2C_SPEED_FREQ_STANDARD] =
-  {
-    .freq = 100000,
-    .freq_min = 80000,
-    .freq_max = 120000,
-    .hddat_min = 0,
-    .vddat_max = 3450,
-    .sudat_min = 250,
-    .lscl_min = 4700,
-    .hscl_min = 4000,
-    .trise = 640,
-    .tfall = 20,
-    .dnf = I2C_DIGITAL_FILTER_COEF,
-  },
-  [I2C_SPEED_FREQ_FAST] =
-  {
-    .freq = 400000,
-    .freq_min = 320000,
-    .freq_max = 480000,
-    .hddat_min = 0,
-    .vddat_max = 900,
-    .sudat_min = 100,
-    .lscl_min = 1300,
-    .hscl_min = 600,
-    .trise = 250,
-    .tfall = 100,
-    .dnf = I2C_DIGITAL_FILTER_COEF,
-  },
-  [I2C_SPEED_FREQ_FAST_PLUS] =
-  {
-    .freq = 1000000,
-    .freq_min = 800000,
-    .freq_max = 1200000,
-    .hddat_min = 0,
-    .vddat_max = 450,
-    .sudat_min = 50,
-    .lscl_min = 500,
-    .hscl_min = 260,
-    .trise = 60,
-    .tfall = 100,
-    .dnf = I2C_DIGITAL_FILTER_COEF,
-  }
-};
-#endif /* I2C_TIMING */
-
-/*  Family specific description for I2C */
-typedef enum {
-#if defined(I2C1_BASE)
-  I2C1_INDEX,
-#endif
-#if defined(I2C2_BASE)
-  I2C2_INDEX,
-#endif
-#if defined(I2C3_BASE)
-  I2C3_INDEX,
-#endif
-#if defined(I2C4_BASE)
-  I2C4_INDEX,
-#endif
-#if defined(I2C5_BASE)
-  I2C5_INDEX,
-#endif
-#if defined(I2C6_BASE)
-  I2C6_INDEX,
-#endif
-  I2C_NUM
-} i2c_index_t;
-
-/* Private Variables */
-static I2C_HandleTypeDef *i2c_handles[I2C_NUM];
-
-#ifdef I2C_TIMING
-/**
-  * @brief  This function return the I2C clock source frequency.
-  * @param  i2c: I2C instance
-  * @retval frequency in Hz
-  */
-static uint32_t i2c_getClkFreq(I2C_TypeDef *i2c)
-{
-  uint32_t clkSrcFreq = 0;
-#if !defined(STM32MP1xx)
-#ifdef STM32H7xx
-  PLL3_ClocksTypeDef PLL3_Clocks;
-#endif
-#if defined I2C1_BASE
-  if (i2c == I2C1) {
-    switch (__HAL_RCC_GET_I2C1_SOURCE()) {
-      case RCC_I2C1CLKSOURCE_HSI:
-        clkSrcFreq = HSI_VALUE;
-        break;
-#ifdef RCC_I2C1CLKSOURCE_SYSCLK
-      case RCC_I2C1CLKSOURCE_SYSCLK:
-        clkSrcFreq = SystemCoreClock;
-        break;
-#endif
-#if defined(RCC_I2C1CLKSOURCE_PCLK1) || defined(RCC_I2C1CLKSOURCE_D2PCLK1)
-#ifdef RCC_I2C1CLKSOURCE_PCLK1
-      case RCC_I2C1CLKSOURCE_PCLK1:
-#endif
-#ifdef RCC_I2C1CLKSOURCE_D2PCLK1
-      case RCC_I2C1CLKSOURCE_D2PCLK1:
-#endif
-        clkSrcFreq = HAL_RCC_GetPCLK1Freq();
-        break;
-#endif
-#ifdef RCC_I2C1CLKSOURCE_CSI
-      case RCC_I2C1CLKSOURCE_CSI:
-        clkSrcFreq = CSI_VALUE;
-        break;
-#endif
-#ifdef RCC_I2C1CLKSOURCE_PLL3
-      case RCC_I2C1CLKSOURCE_PLL3:
-        HAL_RCCEx_GetPLL3ClockFreq(&PLL3_Clocks);
-        clkSrcFreq = PLL3_Clocks.PLL3_R_Frequency;
-        break;
-#endif
-      default:
-        Error_Handler();
-    }
-  }
-#endif // I2C1_BASE
-#if defined I2C2_BASE
-  if (i2c == I2C2) {
-#ifdef __HAL_RCC_GET_I2C2_SOURCE
-    switch (__HAL_RCC_GET_I2C2_SOURCE()) {
-      case RCC_I2C2CLKSOURCE_HSI:
-        clkSrcFreq = HSI_VALUE;
-        break;
-#ifdef RCC_I2C2CLKSOURCE_SYSCLK
-      case RCC_I2C2CLKSOURCE_SYSCLK:
-        clkSrcFreq = SystemCoreClock;
-        break;
-#endif
-#if defined(RCC_I2C2CLKSOURCE_PCLK1) || defined(RCC_I2C2CLKSOURCE_D2PCLK1)
-#ifdef RCC_I2C2CLKSOURCE_PCLK1
-      case RCC_I2C2CLKSOURCE_PCLK1:
-#endif
-#ifdef RCC_I2C2CLKSOURCE_D2PCLK1
-      case RCC_I2C2CLKSOURCE_D2PCLK1:
-#endif
-        clkSrcFreq = HAL_RCC_GetPCLK1Freq();
-        break;
-#endif
-#ifdef RCC_I2C2CLKSOURCE_CSI
-      case RCC_I2C2CLKSOURCE_CSI:
-        clkSrcFreq = CSI_VALUE;
-        break;
-#endif
-#ifdef RCC_I2C2CLKSOURCE_PLL3
-      case RCC_I2C2CLKSOURCE_PLL3:
-        HAL_RCCEx_GetPLL3ClockFreq(&PLL3_Clocks);
-        clkSrcFreq = PLL3_Clocks.PLL3_R_Frequency;
-        break;
-#endif
-      default:
-        Error_Handler();
-    }
-#else
-    /* STM32 L0/G0 I2C2 has no independent clock */
-    clkSrcFreq = HAL_RCC_GetPCLK1Freq();
-#endif
-  }
-#endif // I2C2_BASE
-#if defined I2C3_BASE
-  if (i2c == I2C3) {
-    switch (__HAL_RCC_GET_I2C3_SOURCE()) {
-      case RCC_I2C3CLKSOURCE_HSI:
-        clkSrcFreq = HSI_VALUE;
-        break;
-#ifdef RCC_I2C3CLKSOURCE_SYSCLK
-      case RCC_I2C3CLKSOURCE_SYSCLK:
-        clkSrcFreq = SystemCoreClock;
-        break;
-#endif
-#if defined(RCC_I2C3CLKSOURCE_PCLK1) || defined(RCC_I2C3CLKSOURCE_D2PCLK1)
-#ifdef RCC_I2C3CLKSOURCE_PCLK1
-      case RCC_I2C3CLKSOURCE_PCLK1:
-#endif
-#ifdef RCC_I2C3CLKSOURCE_D2PCLK1
-      case RCC_I2C3CLKSOURCE_D2PCLK1:
-#endif
-        clkSrcFreq = HAL_RCC_GetPCLK1Freq();
-        break;
-#endif
-#ifdef RCC_I2C3CLKSOURCE_CSI
-      case RCC_I2C3CLKSOURCE_CSI:
-        clkSrcFreq = CSI_VALUE;
-        break;
-#endif
-#ifdef RCC_I2C3CLKSOURCE_PLL3
-      case RCC_I2C3CLKSOURCE_PLL3:
-        HAL_RCCEx_GetPLL3ClockFreq(&PLL3_Clocks);
-        clkSrcFreq = PLL3_Clocks.PLL3_R_Frequency;
-        break;
-#endif
-      default:
-        Error_Handler();
-    }
-  }
-#endif // I2C3_BASE
-#if defined I2C4_BASE
-  if (i2c == I2C4) {
-    switch (__HAL_RCC_GET_I2C4_SOURCE()) {
-      case RCC_I2C4CLKSOURCE_HSI:
-        clkSrcFreq = HSI_VALUE;
-        break;
-#ifdef RCC_I2C4CLKSOURCE_SYSCLK
-      case RCC_I2C4CLKSOURCE_SYSCLK:
-        clkSrcFreq = SystemCoreClock;
-        break;
-#endif
-#ifdef RCC_I2C4CLKSOURCE_PCLK1
-      case RCC_I2C4CLKSOURCE_PCLK1:
-        clkSrcFreq = HAL_RCC_GetPCLK1Freq();
-        break;
-#endif
-#ifdef RCC_I2C4CLKSOURCE_D3PCLK1
-      case RCC_I2C4CLKSOURCE_D3PCLK1:
-        clkSrcFreq = HAL_RCCEx_GetD3PCLK1Freq();
-        break;
-#endif
-#ifdef RCC_I2C4CLKSOURCE_CSI
-      case RCC_I2C4CLKSOURCE_CSI:
-        clkSrcFreq = CSI_VALUE;
-        break;
-#endif
-#ifdef RCC_I2C4CLKSOURCE_PLL3
-      case RCC_I2C4CLKSOURCE_PLL3:
-        HAL_RCCEx_GetPLL3ClockFreq(&PLL3_Clocks);
-        clkSrcFreq = PLL3_Clocks.PLL3_R_Frequency;
-        break;
-#endif
-      default:
-        Error_Handler();
-    }
-  }
-#endif // I2C4_BASE
-
-#elif defined(STM32MP1xx)
-  if (i2c == I2C1) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C12);
-  }
-  if (i2c == I2C2) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C12);
-  }
-  if (i2c == I2C3) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C35);
-  }
-  if (i2c == I2C4) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C46);
-  }
-#endif // STM32MP1xx
-
-#if defined I2C5_BASE
-  if (i2c == I2C5) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C35);
-  }
-#endif // I2C5_BASE
-#if defined I2C6_BASE
-  if (i2c == I2C6) {
-    clkSrcFreq = HAL_RCCEx_GetPeriphCLKFreq(RCC_PERIPHCLK_I2C46);
-  }
-#endif // I2C6_BASE
-  return clkSrcFreq;
-}
-
-/**
-* @brief Calculate PRESC, SCLDEL, SDADEL, SCLL and SCLH and find best configuration.
-* @param clkSrcFreq I2C source clock in HZ.
-* @param i2c_speed I2C frequency (index).
-* @retval config index (0 to I2C_VALID_TIMING_NBR], 0xFFFFFFFF for no
-valid config.
+  Modified 2012 by Todd Krein (todd@krein.org) to implement repeated starts
+  Modified 2020 by Greyson Christoforo (grey@christoforo.net) to implement timeouts
 */
-static uint32_t i2c_computeTiming(uint32_t clkSrcFreq, uint32_t i2c_speed)
+
+#include <math.h>
+#include <stdlib.h>
+#include <inttypes.h>
+#include <avr/io.h>
+#include <avr/interrupt.h>
+#include <util/delay.h>
+#include <compat/twi.h>
+#include "Arduino.h" // for digitalWrite and micros
+
+#ifndef cbi
+#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
+#endif
+
+#ifndef sbi
+#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
+#endif
+
+#include "pins_arduino.h"
+#include "twi.h"
+
+static volatile uint8_t twi_state;
+static volatile uint8_t twi_slarw;
+static volatile uint8_t twi_sendStop;			// should the transaction end with a stop
+static volatile uint8_t twi_inRepStart;			// in the middle of a repeated start
+
+// twi_timeout_us > 0 prevents the code from getting stuck in various while loops here
+// if twi_timeout_us == 0 then timeout checking is disabled (the previous Wire lib behavior)
+// at some point in the future, the default twi_timeout_us value could become 25000
+// and twi_do_reset_on_timeout could become true
+// to conform to the SMBus standard
+// http://smbus.org/specs/SMBus_3_1_20180319.pdf
+static volatile uint32_t twi_timeout_us = 0ul;
+static volatile bool twi_timed_out_flag = false;  // a timeout has been seen
+static volatile bool twi_do_reset_on_timeout = false;  // reset the TWI registers on timeout
+
+static void (*twi_onSlaveTransmit)(void);
+static void (*twi_onSlaveReceive)(uint8_t*, int);
+
+static uint8_t twi_masterBuffer[TWI_BUFFER_LENGTH];
+static volatile uint8_t twi_masterBufferIndex;
+static volatile uint8_t twi_masterBufferLength;
+
+static uint8_t twi_txBuffer[TWI_BUFFER_LENGTH];
+static volatile uint8_t twi_txBufferIndex;
+static volatile uint8_t twi_txBufferLength;
+
+static uint8_t twi_rxBuffer[TWI_BUFFER_LENGTH];
+static volatile uint8_t twi_rxBufferIndex;
+
+static volatile uint8_t twi_error;
+
+/* 
+ * Function twi_init
+ * Desc     readys twi pins and sets twi bitrate
+ * Input    none
+ * Output   none
+ */
+void twi_init(void)
 {
-  uint32_t ret = 0xFFFFFFFFU;
-  uint32_t valid_timing_nbr = 0;
-  uint32_t ti2cclk;
-  uint32_t ti2cspeed;
-  uint32_t prev_error;
-  uint32_t dnf_delay;
-  uint32_t clk_min, clk_max;
-  uint16_t scll, sclh;
-  uint8_t prev_presc = I2C_PRESC_MAX;
+  // initialize state
+  twi_state = TWI_READY;
+  twi_sendStop = true;		// default value
+  twi_inRepStart = false;
+  
+  // activate internal pullups for twi.
+  digitalWrite(SDA, 1);
+  digitalWrite(SCL, 1);
 
-  int32_t tsdadel_min, tsdadel_max;
-  int32_t tscldel_min;
-  uint8_t presc, scldel, sdadel;
-  uint32_t tafdel_min, tafdel_max;
+  // initialize twi prescaler and bit rate
+  cbi(TWSR, TWPS0);
+  cbi(TWSR, TWPS1);
+  TWBR = ((F_CPU / TWI_FREQ) - 16) / 2;
 
-  if (i2c_speed < I2C_SPEED_FREQ_NUMBER) {
+  /* twi bit rate formula from atmega128 manual pg 204
+  SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
+  note: TWBR should be 10 or higher for master mode
+  It is 72 for a 16mhz Wiring board with 100kHz TWI */
 
-    /* Don't compute timing if already available value for the requested speed with the same I2C input frequency */
-    if ((I2C_ClockTiming[i2c_speed].input_clock == clkSrcFreq) && (I2C_ClockTiming[i2c_speed].timing != 0U)) {
-      ret = I2C_ClockTiming[i2c_speed].timing;
-    } else {
-      /* Save the I2C input clock for which the timing will be saved */
-      I2C_ClockTiming[i2c_speed].input_clock = clkSrcFreq;
+  // enable twi module, acks, and twi interrupt
+  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA);
+}
 
-      ti2cclk = (SEC2NSEC + (clkSrcFreq / 2U)) / clkSrcFreq;
-      ti2cspeed = (SEC2NSEC + (I2C_Charac[i2c_speed].freq / 2U)) / I2C_Charac[i2c_speed].freq;
+/* 
+ * Function twi_disable
+ * Desc     disables twi pins
+ * Input    none
+ * Output   none
+ */
+void twi_disable(void)
+{
+  // disable twi module, acks, and twi interrupt
+  TWCR &= ~(_BV(TWEN) | _BV(TWIE) | _BV(TWEA));
 
-      tafdel_min = (I2C_USE_ANALOG_FILTER == 1U) ? I2C_ANALOG_FILTER_DELAY_MIN : 0U;
-      tafdel_max = (I2C_USE_ANALOG_FILTER == 1U) ? I2C_ANALOG_FILTER_DELAY_MAX : 0U;
-      /*
-       * tDNF = DNF x tI2CCLK
-       * tPRESC = (PRESC+1) x tI2CCLK
-       * SDADEL >= {tf +tHD;DAT(min) - tAF(min) - tDNF - [3 x tI2CCLK]} / {tPRESC}
-       * SDADEL <= {tVD;DAT(max) - tr - tAF(max) - tDNF- [4 x tI2CCLK]} / {tPRESC}
-       */
-      tsdadel_min = (int32_t)I2C_Charac[i2c_speed].tfall +
-                    (int32_t)I2C_Charac[i2c_speed].hddat_min -
-                    (int32_t)tafdel_min - (int32_t)(((int32_t)I2C_Charac[i2c_speed].dnf +
-                                                     3) * (int32_t)ti2cclk);
-      tsdadel_max = (int32_t)I2C_Charac[i2c_speed].vddat_max -
-                    (int32_t)I2C_Charac[i2c_speed].trise -
-                    (int32_t)tafdel_max - (int32_t)(((int32_t)I2C_Charac[i2c_speed].dnf +
-                                                     4) * (int32_t)ti2cclk);
-      /* {[tr+ tSU;DAT(min)] / [tPRESC]} - 1 <= SCLDEL */
-      tscldel_min = (int32_t)I2C_Charac[i2c_speed].trise +
-                    (int32_t)I2C_Charac[i2c_speed].sudat_min;
-      if (tsdadel_min <= 0) {
-        tsdadel_min = 0;
-      }
-      if (tsdadel_max <= 0) {
-        tsdadel_max = 0;
-      }
+  // deactivate internal pullups for twi.
+  digitalWrite(SDA, 0);
+  digitalWrite(SCL, 0);
+}
 
-      /* tDNF = DNF x tI2CCLK */
-      dnf_delay = I2C_Charac[i2c_speed].dnf * ti2cclk;
+/* 
+ * Function twi_slaveInit
+ * Desc     sets slave address and enables interrupt
+ * Input    none
+ * Output   none
+ */
+void twi_setAddress(uint8_t address)
+{
+  // set twi slave address (skip over TWGCE bit)
+  TWAR = address << 1;
+}
 
-      clk_max = SEC2NSEC / I2C_Charac[i2c_speed].freq_min;
-      clk_min = SEC2NSEC / I2C_Charac[i2c_speed].freq_max;
+/* 
+ * Function twi_setClock
+ * Desc     sets twi bit rate
+ * Input    Clock Frequency
+ * Output   none
+ */
+void twi_setFrequency(uint32_t frequency)
+{
+  TWBR = ((F_CPU / frequency) - 16) / 2;
+  
+  /* twi bit rate formula from atmega128 manual pg 204
+  SCL Frequency = CPU Clock Frequency / (16 + (2 * TWBR))
+  note: TWBR should be 10 or higher for master mode
+  It is 72 for a 16mhz Wiring board with 100kHz TWI */
+}
 
-      prev_error = ti2cspeed;
+/* 
+ * Function twi_readFrom
+ * Desc     attempts to become twi bus master and read a
+ *          series of bytes from a device on the bus
+ * Input    address: 7bit i2c device address
+ *          data: pointer to byte array
+ *          length: number of bytes to read into array
+ *          sendStop: Boolean indicating whether to send a stop at the end
+ * Output   number of bytes read
+ */
+uint8_t twi_readFrom(uint8_t address, uint8_t* data, uint8_t length, uint8_t sendStop)
+{
+  uint8_t i;
 
-      for (presc = 0; presc < I2C_PRESC_MAX; presc++) {
-        for (scldel = 0; scldel < I2C_SCLDEL_MAX; scldel++) {
-          /* TSCLDEL = (SCLDEL+1) * (PRESC+1) * TI2CCLK */
-          uint32_t tscldel = (scldel + 1U) * (presc + 1U) * ti2cclk;
-          if (tscldel >= (uint32_t)tscldel_min) {
+  // ensure data will fit into buffer
+  if(TWI_BUFFER_LENGTH < length){
+    return 0;
+  }
 
-            for (sdadel = 0; sdadel < I2C_SDADEL_MAX; sdadel++) {
-              /* TSDADEL = SDADEL * (PRESC+1) * TI2CCLK */
-              uint32_t tsdadel = (sdadel * (presc + 1U)) * ti2cclk;
-              if ((tsdadel >= (uint32_t)tsdadel_min) && (tsdadel <=
-                                                         (uint32_t)tsdadel_max)) {
-                if (presc != prev_presc) {
-                  valid_timing_nbr ++;
-                  if (valid_timing_nbr >= I2C_VALID_TIMING_NBR) {
-                    return ret;
-                  }
-                  /* tPRESC = (PRESC+1) x tI2CCLK*/
-                  uint32_t tpresc = (presc + 1U) * ti2cclk;
-                  for (scll = 0; scll < I2C_SCLL_MAX; scll++) {
-                    /* tLOW(min) <= tAF(min) + tDNF + 2 x tI2CCLK + [(SCLL+1) x tPRESC ] */
-                    uint32_t tscl_l = tafdel_min + dnf_delay + (2U * ti2cclk) + ((scll + 1U) * tpresc);
-                    /* The I2CCLK period tI2CCLK must respect the following conditions:
-                    tI2CCLK < (tLOW - tfilters) / 4 and tI2CCLK < tHIGH */
-                    if ((tscl_l > I2C_Charac[i2c_speed].lscl_min) &&
-                        (ti2cclk < ((tscl_l - tafdel_min - dnf_delay) / 4U))) {
-                      for (sclh = 0; sclh < I2C_SCLH_MAX; sclh++) {
-                        /* tHIGH(min) <= tAF(min) + tDNF + 2 x tI2CCLK + [(SCLH+1) x tPRESC] */
-                        uint32_t tscl_h = tafdel_min + dnf_delay + (2U * ti2cclk) + ((sclh + 1U) * tpresc);
-                        /* tSCL = tf + tLOW + tr + tHIGH */
-                        uint32_t tscl = tscl_l + tscl_h + I2C_Charac[i2c_speed].trise +
-                                        I2C_Charac[i2c_speed].tfall;
-                        if ((tscl >= clk_min) && (tscl <= clk_max) &&
-                            (tscl_h >= I2C_Charac[i2c_speed].hscl_min) && (ti2cclk < tscl_h)) {
-                          int32_t error = (int32_t)tscl - (int32_t)ti2cspeed;
-                          if (error < 0) {
-                            error = -error;
-                          }
-                          /* look for the timings with the lowest clock error */
-                          if ((uint32_t)error < prev_error) {
-                            prev_error = (uint32_t)error;
-                            ret = ((presc & 0x0FU) << 28) | \
-                                  ((scldel & 0x0FU) << 20) | \
-                                  ((sdadel & 0x0FU) << 16) | \
-                                  ((sclh & 0xFFU) << 8) | \
-                                  ((scll & 0xFFU) << 0);
-                            prev_presc = presc;
-                            /* Save I2C Timing found for further reuse (and avoid to compute again) */
-                            I2C_ClockTiming[i2c_speed].timing = ret;
-                          }
-                        }
-                      }
-                    }
-                  }
-                }
-              }
-            }
-          }
-        }
-      }
+  // wait until twi is ready, become master receiver
+  uint32_t startMicros = micros();
+  while(TWI_READY != twi_state){
+    if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+      twi_handleTimeout(twi_do_reset_on_timeout);
+      return 0;
     }
   }
-  return ret;
-}
-#endif /* I2C_TIMING */
+  twi_state = TWI_MRX;
+  twi_sendStop = sendStop;
+  // reset error state (0xFF.. no error occured)
+  twi_error = 0xFF;
 
-/**
-* @brief Compute I2C timing according current I2C clock source and
-required I2C clock.
-* @param  obj : pointer to i2c_t structure
-* @param frequency
- Required I2C clock in Hz.
-* @retval I2C timing or 0 in case of error.
-*/
-static uint32_t i2c_getTiming(i2c_t *obj, uint32_t frequency)
-{
-  uint32_t ret = 0;
-  uint32_t i2c_speed = 0;
-  if (frequency <= 100000) {
-    i2c_speed = 100000;
-  } else if (frequency <= 400000) {
-    i2c_speed = 400000;
-  } else if (frequency <= 1000000) {
-    i2c_speed = 1000000;
+  // initialize buffer iteration vars
+  twi_masterBufferIndex = 0;
+  twi_masterBufferLength = length-1;  // This is not intuitive, read on...
+  // On receive, the previously configured ACK/NACK setting is transmitted in
+  // response to the received byte before the interrupt is signalled. 
+  // Therefor we must actually set NACK when the _next_ to last byte is
+  // received, causing that NACK to be sent in response to receiving the last
+  // expected byte of data.
+
+  // build sla+w, slave device address + w bit
+  twi_slarw = TW_READ;
+  twi_slarw |= address << 1;
+
+  if (true == twi_inRepStart) {
+    // if we're in the repeated start state, then we've already sent the start,
+    // (@@@ we hope), and the TWI statemachine is just waiting for the address byte.
+    // We need to remove ourselves from the repeated start state before we enable interrupts,
+    // since the ISR is ASYNC, and we could get confused if we hit the ISR before cleaning
+    // up. Also, don't enable the START interrupt. There may be one pending from the 
+    // repeated start that we sent ourselves, and that would really confuse things.
+    twi_inRepStart = false;			// remember, we're dealing with an ASYNC ISR
+    startMicros = micros();
+    do {
+      TWDR = twi_slarw;
+      if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+        twi_handleTimeout(twi_do_reset_on_timeout);
+        return 0;
+      }
+    } while(TWCR & _BV(TWWC));
+    TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);	// enable INTs, but not START
+  } else {
+    // send start condition
+    TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTA);
   }
-#ifdef I2C_TIMING
-  if (i2c_speed != 0U) {
-    switch (i2c_speed) {
-      default:
-      case 100000:
-#ifdef I2C_TIMING_SM
-        ret = I2C_TIMING_SM;
-#else
-        ret = i2c_computeTiming(i2c_getClkFreq(obj->i2c), I2C_SPEED_FREQ_STANDARD);
-#endif
-        break;
-      case 400000:
-#ifdef I2C_TIMING_FM
-        ret = I2C_TIMING_FM;
-#else
-        ret = i2c_computeTiming(i2c_getClkFreq(obj->i2c), I2C_SPEED_FREQ_FAST);
-#endif
-        break;
-      case 1000000:
-#ifdef I2C_TIMING_FMP
-        ret = I2C_TIMING_FMP;
-#else
-        ret = i2c_computeTiming(i2c_getClkFreq(obj->i2c), I2C_SPEED_FREQ_FAST_PLUS);
-#endif
-        break;
+
+  // wait for read operation to complete
+  startMicros = micros();
+  while(TWI_MRX == twi_state){
+    if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+      twi_handleTimeout(twi_do_reset_on_timeout);
+      return 0;
     }
   }
-  /* Kept for future if more speed are proposed */
-  /* uint32_t speed;
-   * for (speed = 0; speed <= (uint32_t)I2C_SPEED_FREQ_FAST_PLUS; speed++) {
-   *   if ((i2c_speed >= I2C_Charac[speed].freq_min) &&
-   *       (i2c_speed <= I2C_Charac[speed].freq_max)) {
-   *     i2c_computeTiming(i2c_getClkFreq(obj->i2c), speed);
-   *     break;
-   *   }
-   * }
-   */
-#else
-  UNUSED(obj);
-  ret = i2c_speed;
-#endif /* I2C_TIMING */
-  return ret;
+
+  if (twi_masterBufferIndex < length) {
+    length = twi_masterBufferIndex;
+  }
+
+  // copy twi buffer to data
+  for(i = 0; i < length; ++i){
+    data[i] = twi_masterBuffer[i];
+  }
+
+  return length;
 }
 
-/**
-  * @brief  Default init and setup GPIO and I2C peripheral
-  * @param  obj : pointer to i2c_t structure
-  * @retval none
-  */
-void i2c_init(i2c_t *obj)
+/* 
+ * Function twi_writeTo
+ * Desc     attempts to become twi bus master and write a
+ *          series of bytes to a device on the bus
+ * Input    address: 7bit i2c device address
+ *          data: pointer to byte array
+ *          length: number of bytes in array
+ *          wait: boolean indicating to wait for write or not
+ *          sendStop: boolean indicating whether or not to send a stop at the end
+ * Output   0 .. success
+ *          1 .. length to long for buffer
+ *          2 .. address send, NACK received
+ *          3 .. data send, NACK received
+ *          4 .. other twi error (lost bus arbitration, bus error, ..)
+ *          5 .. timeout
+ */
+uint8_t twi_writeTo(uint8_t address, uint8_t* data, uint8_t length, uint8_t wait, uint8_t sendStop)
 {
-  i2c_custom_init(obj, 100000, I2C_ADDRESSINGMODE_7BIT, 0x33);
+  uint8_t i;
+
+  // ensure data will fit into buffer
+  if(TWI_BUFFER_LENGTH < length){
+    return 1;
+  }
+
+  // wait until twi is ready, become master transmitter
+  uint32_t startMicros = micros();
+  while(TWI_READY != twi_state){
+    if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+      twi_handleTimeout(twi_do_reset_on_timeout);
+      return (5);
+    }
+  }
+  twi_state = TWI_MTX;
+  twi_sendStop = sendStop;
+  // reset error state (0xFF.. no error occured)
+  twi_error = 0xFF;
+
+  // initialize buffer iteration vars
+  twi_masterBufferIndex = 0;
+  twi_masterBufferLength = length;
+  
+  // copy data to twi buffer
+  for(i = 0; i < length; ++i){
+    twi_masterBuffer[i] = data[i];
+  }
+  
+  // build sla+w, slave device address + w bit
+  twi_slarw = TW_WRITE;
+  twi_slarw |= address << 1;
+  
+  // if we're in a repeated start, then we've already sent the START
+  // in the ISR. Don't do it again.
+  //
+  if (true == twi_inRepStart) {
+    // if we're in the repeated start state, then we've already sent the start,
+    // (@@@ we hope), and the TWI statemachine is just waiting for the address byte.
+    // We need to remove ourselves from the repeated start state before we enable interrupts,
+    // since the ISR is ASYNC, and we could get confused if we hit the ISR before cleaning
+    // up. Also, don't enable the START interrupt. There may be one pending from the 
+    // repeated start that we sent outselves, and that would really confuse things.
+    twi_inRepStart = false;			// remember, we're dealing with an ASYNC ISR
+    startMicros = micros();
+    do {
+      TWDR = twi_slarw;
+      if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+        twi_handleTimeout(twi_do_reset_on_timeout);
+        return (5);
+      }
+    } while(TWCR & _BV(TWWC));
+    TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE);	// enable INTs, but not START
+  } else {
+    // send start condition
+    TWCR = _BV(TWINT) | _BV(TWEA) | _BV(TWEN) | _BV(TWIE) | _BV(TWSTA);	// enable INTs
+  }
+
+  // wait for write operation to complete
+  startMicros = micros();
+  while(wait && (TWI_MTX == twi_state)){
+    if((twi_timeout_us > 0ul) && ((micros() - startMicros) > twi_timeout_us)) {
+      twi_handleTimeout(twi_do_reset_on_timeout);
+      return (5);
+    }
+  }
+  
+  if (twi_error == 0xFF)
+    return 0;	// success
+  else if (twi_error == TW_MT_SLA_NACK)
+    return 2;	// error: address send, nack received
+  else if (twi_error == TW_MT_DATA_NACK)
+    return 3;	// error: data send, nack received
+  else
+    return 4;	// other twi error
 }
 
-/**
-  * @brief  Initialize and setup GPIO and I2C peripheral
-  * @param  obj : pointer to i2c_t structure
-  * @param  timing : one of the i2c_timing_e
-  * @param  addressingMode : I2C_ADDRESSINGMODE_7BIT or I2C_ADDRESSINGMODE_10BIT
-  * @param  ownAddress : device address
-  * @retval none
-  */
-void i2c_custom_init(i2c_t *obj, uint32_t timing, uint32_t addressingMode, uint32_t ownAddress)
+/* 
+ * Function twi_transmit
+ * Desc     fills slave tx buffer with data
+ *          must be called in slave tx event callback
+ * Input    data: pointer to byte array
+ *          length: number of bytes in array
+ * Output   1 length too long for buffer
+ *          2 not slave transmitter
+ *          0 ok
+ */
+uint8_t twi_transmit(const uint8_t* data, uint8_t length)
 {
-  if (obj != NULL) {
+  uint8_t i;
 
+  // ensure data will fit into buffer
+  if(TWI_BUFFER_LENGTH < (twi_txBufferLength+length)){
+    return 1;
+  }
+  
+  // ensure we are currently a slave transmitter
+  if(TWI_STX != twi_state){
+    return 2;
+  }
+  
+  // set length and copy data into tx buffer
+  for(i = 0; i < length; ++i){
+    twi_txBuffer[twi_txBufferLength+i] = data[i];
+  }
+  twi_txBufferLength += length;
+  
+  return 0;
+}
 
-    I2C_HandleTypeDef *handle = &(obj->handle);
+/* 
+ * Function twi_attachSlaveRxEvent
+ * Desc     sets function called before a slave read operation
+ * Input    function: callback function to use
+ * Output   none
+ */
+void twi_attachSlaveRxEvent( void (*function)(uint8_t*, int) )
+{
+  twi_onSlaveReceive = function;
+}
 
-    // Determine the I2C to use
-    I2C_TypeDef *i2c_sda = pinmap_peripheral(obj->sda, PinMap_I2C_SDA);
-    I2C_TypeDef *i2c_scl = pinmap_peripheral(obj->scl, PinMap_I2C_SCL);
+/* 
+ * Function twi_attachSlaveTxEvent
+ * Desc     sets function called before a slave write operation
+ * Input    function: callback function to use
+ * Output   none
+ */
+void twi_attachSlaveTxEvent( void (*function)(void) )
+{
+  twi_onSlaveTransmit = function;
+}
 
-    //Pins SDA/SCL must not be NP
-    if (i2c_sda == NP || i2c_scl == NP) {
-      core_debug("ERROR: at least one I2C pin has no peripheral\n");
-    } else {
+/* 
+ * Function twi_reply
+ * Desc     sends byte or readys receive line
+ * Input    ack: byte indicating to ack or to nack
+ * Output   none
+ */
+void twi_reply(uint8_t ack)
+{
+  // transmit master read ready signal, with or without ack
+  if(ack){
+    TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWINT) | _BV(TWEA);
+  }else{
+    TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWINT);
+  }
+}
 
-      obj->i2c = pinmap_merge_peripheral(i2c_sda, i2c_scl);
+/* 
+ * Function twi_stop
+ * Desc     relinquishes bus master status
+ * Input    none
+ * Output   none
+ */
+void twi_stop(void)
+{
+  // send stop condition
+  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT) | _BV(TWSTO);
 
-      if (obj->i2c == NP) {
-        core_debug("ERROR: I2C pins mismatch\n");
-
+  // wait for stop condition to be exectued on bus
+  // TWINT is not set after a stop condition!
+  // We cannot use micros() from an ISR, so approximate the timeout with cycle-counted delays
+  const uint8_t us_per_loop = 8;
+  uint32_t counter = (twi_timeout_us + us_per_loop - 1)/us_per_loop; // Round up
+  while(TWCR & _BV(TWSTO)){
+    if(twi_timeout_us > 0ul){
+      if (counter > 0ul){
+        _delay_us(10);
+        counter--;
       } else {
-
-#if defined I2C1_BASE
-        // Enable I2C1 clock if not done
-        if (obj->i2c == I2C1) {
-          __HAL_RCC_I2C1_CLK_ENABLE();
-          __HAL_RCC_I2C1_FORCE_RESET();
-          __HAL_RCC_I2C1_RELEASE_RESET();
-
-          obj->irq = I2C1_EV_IRQn;
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-          obj->irqER = I2C1_ER_IRQn;
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-          i2c_handles[I2C1_INDEX] = handle;
-        }
-#endif // I2C1_BASE
-#if defined I2C2_BASE
-        // Enable I2C2 clock if not done
-        if (obj->i2c == I2C2) {
-          __HAL_RCC_I2C2_CLK_ENABLE();
-          __HAL_RCC_I2C2_FORCE_RESET();
-          __HAL_RCC_I2C2_RELEASE_RESET();
-          obj->irq = I2C2_EV_IRQn;
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-          obj->irqER = I2C2_ER_IRQn;
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-          i2c_handles[I2C2_INDEX] = handle;
-        }
-#endif // I2C2_BASE
-#if defined I2C3_BASE
-        // Enable I2C3 clock if not done
-        if (obj->i2c == I2C3) {
-          __HAL_RCC_I2C3_CLK_ENABLE();
-          __HAL_RCC_I2C3_FORCE_RESET();
-          __HAL_RCC_I2C3_RELEASE_RESET();
-          obj->irq = I2C3_EV_IRQn;
-#if !defined(STM32L0xx)
-          obj->irqER = I2C3_ER_IRQn;
-#endif /* !STM32L0xx */
-          i2c_handles[I2C3_INDEX] = handle;
-        }
-#endif // I2C3_BASE
-#if defined I2C4_BASE
-        // Enable I2C4 clock if not done
-        if (obj->i2c == I2C4) {
-          __HAL_RCC_I2C4_CLK_ENABLE();
-          __HAL_RCC_I2C4_FORCE_RESET();
-          __HAL_RCC_I2C4_RELEASE_RESET();
-          obj->irq = I2C4_EV_IRQn;
-          obj->irqER = I2C4_ER_IRQn;
-          i2c_handles[I2C4_INDEX] = handle;
-        }
-#endif // I2C4_BASE
-#if defined I2C5_BASE
-        // Enable I2C5 clock if not done
-        if (obj->i2c == I2C5) {
-          __HAL_RCC_I2C5_CLK_ENABLE();
-          __HAL_RCC_I2C5_FORCE_RESET();
-          __HAL_RCC_I2C5_RELEASE_RESET();
-          obj->irq = I2C5_EV_IRQn;
-          obj->irqER = I2C5_ER_IRQn;
-          i2c_handles[I2C5_INDEX] = handle;
-        }
-#endif // I2C5_BASE
-#if defined I2C6_BASE
-        // Enable I2C6 clock if not done
-        if (obj->i2c == I2C6) {
-          __HAL_RCC_I2C6_CLK_ENABLE();
-          __HAL_RCC_I2C6_FORCE_RESET();
-          __HAL_RCC_I2C6_RELEASE_RESET();
-          obj->irq = I2C6_EV_IRQn;
-          obj->irqER = I2C6_ER_IRQn;
-          i2c_handles[I2C6_INDEX] = handle;
-        }
-#endif // I2C6_BASE
-
-        /* Configure I2C GPIO pins */
-        pinmap_pinout(obj->scl, PinMap_I2C_SCL);
-        pinmap_pinout(obj->sda, PinMap_I2C_SDA);
-
-        handle->Instance             = obj->i2c;
-#ifdef I2C_TIMING
-        handle->Init.Timing      = i2c_getTiming(obj, timing);
-#else
-        handle->Init.ClockSpeed      = i2c_getTiming(obj, timing);
-        /* Standard mode (sm) is up to 100kHz, then it's Fast mode (fm)     */
-        /* In fast mode duty cyble bit must be set in CCR register          */
-        if (timing > 100000) {
-          handle->Init.DutyCycle       = I2C_DUTYCYCLE_16_9;
-        } else {
-          handle->Init.DutyCycle       = I2C_DUTYCYCLE_2;
-        }
-#endif
-        handle->Init.OwnAddress1     = ownAddress;
-        handle->Init.OwnAddress2     = 0xFF;
-        handle->Init.AddressingMode  = addressingMode;
-        handle->Init.DualAddressMode = I2C_DUALADDRESS_DISABLE;
-        handle->Init.GeneralCallMode = (obj->generalCall == 0) ? I2C_GENERALCALL_DISABLE : I2C_GENERALCALL_ENABLE;
-        handle->Init.NoStretchMode   = I2C_NOSTRETCH_DISABLE;
-
-        handle->State = HAL_I2C_STATE_RESET;
-
-        HAL_NVIC_SetPriority(obj->irq, I2C_IRQ_PRIO, I2C_IRQ_SUBPRIO);
-        HAL_NVIC_EnableIRQ(obj->irq);
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-        HAL_NVIC_SetPriority(obj->irqER, I2C_IRQ_PRIO, I2C_IRQ_SUBPRIO);
-        HAL_NVIC_EnableIRQ(obj->irqER);
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-
-        /* Init the I2C */
-        if (HAL_I2C_Init(handle) != HAL_OK) {
-          /* Initialization Error */
-          Error_Handler();
-        }
-
-        /* Initialize default values */
-        obj->slaveRxNbData = 0;
-        obj->slaveMode = SLAVE_MODE_LISTEN;
+        twi_handleTimeout(twi_do_reset_on_timeout);
+        return;
       }
     }
   }
+
+  // update twi state
+  twi_state = TWI_READY;
 }
 
-/**
-  * @brief  Initialize and setup GPIO and I2C peripheral
-  * @param  obj : pointer to i2c_t structure
-  * @retval none
-  */
-void i2c_deinit(i2c_t *obj)
+/* 
+ * Function twi_releaseBus
+ * Desc     releases bus control
+ * Input    none
+ * Output   none
+ */
+void twi_releaseBus(void)
 {
-  HAL_NVIC_DisableIRQ(obj->irq);
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-  HAL_NVIC_DisableIRQ(obj->irqER);
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-  HAL_I2C_DeInit(&(obj->handle));
+  // release bus
+  TWCR = _BV(TWEN) | _BV(TWIE) | _BV(TWEA) | _BV(TWINT);
+
+  // update twi state
+  twi_state = TWI_READY;
 }
 
-/**
-  * @brief  Setup transmission speed. I2C must be configured before.
-  * @param  obj : pointer to i2c_t structure
-  * @param  frequency : i2c transmission speed
-  * @retval none
-  */
-void i2c_setTiming(i2c_t *obj, uint32_t frequency)
-{
-  uint32_t f = i2c_getTiming(obj, frequency);
-  __HAL_I2C_DISABLE(&(obj->handle));
+/* 
+ * Function twi_setTimeoutInMicros
+ * Desc     set a timeout for while loops that twi might get stuck in
+ * Input    timeout value in microseconds (0 means never time out)
+ * Input    reset_with_timeout: true causes timeout events to reset twi
+ * Output   none
+ */
+void twi_setTimeoutInMicros(uint32_t timeout, bool reset_with_timeout){
+  twi_timed_out_flag = false;
+  twi_timeout_us = timeout;
+  twi_do_reset_on_timeout = reset_with_timeout;
+}
 
-#ifdef I2C_TIMING
-  obj->handle.Init.Timing = f;
-#else
-  obj->handle.Init.ClockSpeed = f;
-  /* Standard mode (sm) is up to 100kHz, then it's Fast mode (fm)     */
-  /* In fast mode duty cyble bit must be set in CCR register          */
-  if (frequency > 100000) {
-    obj->handle.Init.DutyCycle       = I2C_DUTYCYCLE_16_9;
-  } else {
-    obj->handle.Init.DutyCycle       = I2C_DUTYCYCLE_2;
+/* 
+ * Function twi_handleTimeout
+ * Desc     this gets called whenever a while loop here has lasted longer than
+ *          twi_timeout_us microseconds. always sets twi_timed_out_flag
+ * Input    reset: true causes this function to reset the twi hardware interface
+ * Output   none
+ */
+void twi_handleTimeout(bool reset){
+  twi_timed_out_flag = true;
+
+  if (reset) {
+    // remember bitrate and address settings
+    uint8_t previous_TWBR = TWBR;
+    uint8_t previous_TWAR = TWAR;
+
+    // reset the interface
+    twi_disable();
+    twi_init();
+
+    // reapply the previous register values
+    TWAR = previous_TWAR;
+    TWBR = previous_TWBR;
   }
-#endif
-  HAL_I2C_Init(&(obj->handle));
-  __HAL_I2C_ENABLE(&(obj->handle));
 }
 
-/**
-  * @brief  Write bytes at a given address
-  * @param  obj : pointer to i2c_t structure
-  * @param  dev_address: specifies the address of the device.
-  * @param  data: pointer to data to be write
-  * @param  size: number of bytes to be write.
-  * @retval read status
-  */
-i2c_status_e i2c_master_write(i2c_t *obj, uint8_t dev_address,
-                              uint8_t *data, uint16_t size)
+/*
+ * Function twi_manageTimeoutFlag
+ * Desc     returns true if twi has seen a timeout
+ *          optionally clears the timeout flag
+ * Input    clear_flag: true if we should reset the hardware
+ * Output   none
+ */
+bool twi_manageTimeoutFlag(bool clear_flag){
+  bool flag = twi_timed_out_flag;
+  if (clear_flag){
+    twi_timed_out_flag = false;
+  }
+  return(flag);
+}
 
+ISR(TWI_vect)
 {
-  i2c_status_e ret = I2C_OK;
-  uint32_t tickstart = HAL_GetTick();
-  uint32_t delta = 0;
-  uint32_t err = 0;
+  switch(TW_STATUS){
+    // All Master
+    case TW_START:     // sent start condition
+    case TW_REP_START: // sent repeated start condition
+      // copy device address and r/w bit to output register and ack
+      TWDR = twi_slarw;
+      twi_reply(1);
+      break;
 
-  /* When size is 0, this is usually an I2C scan / ping to check if device is there and ready */
-  if (size == 0) {
-    ret = i2c_IsDeviceReady(obj, dev_address, 1);
-  } else {
-#if defined(I2C_OTHER_FRAME)
-    uint32_t XferOptions = obj->handle.XferOptions; // save XferOptions value, because handle can be modified by HAL, which cause issue in case of NACK from slave
-#endif
-
-#if defined(I2C_OTHER_FRAME)
-    if (HAL_I2C_Master_Seq_Transmit_IT(&(obj->handle), dev_address, data, size, XferOptions) == HAL_OK) {
-#else
-    if (HAL_I2C_Master_Transmit_IT(&(obj->handle), dev_address, data, size) == HAL_OK) {
-#endif
-      // wait for transfer completion
-      while ((HAL_I2C_GetState(&(obj->handle)) != HAL_I2C_STATE_READY) && (delta < I2C_TIMEOUT_TICK)) {
-        delta = (HAL_GetTick() - tickstart);
-        if (HAL_I2C_GetError(&(obj->handle)) != HAL_I2C_ERROR_NONE) {
-          break;
+    // Master Transmitter
+    case TW_MT_SLA_ACK:  // slave receiver acked address
+    case TW_MT_DATA_ACK: // slave receiver acked data
+      // if there is data to send, send it, otherwise stop 
+      if(twi_masterBufferIndex < twi_masterBufferLength){
+        // copy data to output register and ack
+        TWDR = twi_masterBuffer[twi_masterBufferIndex++];
+        twi_reply(1);
+      }else{
+        if (twi_sendStop){
+          twi_stop();
+       } else {
+         twi_inRepStart = true;	// we're gonna send the START
+         // don't enable the interrupt. We'll generate the start, but we
+         // avoid handling the interrupt until we're in the next transaction,
+         // at the point where we would normally issue the start.
+         TWCR = _BV(TWINT) | _BV(TWSTA)| _BV(TWEN) ;
+         twi_state = TWI_READY;
         }
       }
+      break;
+    case TW_MT_SLA_NACK:  // address sent, nack received
+      twi_error = TW_MT_SLA_NACK;
+      twi_stop();
+      break;
+    case TW_MT_DATA_NACK: // data sent, nack received
+      twi_error = TW_MT_DATA_NACK;
+      twi_stop();
+      break;
+    case TW_MT_ARB_LOST: // lost bus arbitration
+      twi_error = TW_MT_ARB_LOST;
+      twi_releaseBus();
+      break;
 
-      err = HAL_I2C_GetError(&(obj->handle));
-      if ((delta >= I2C_TIMEOUT_TICK)
-          || ((err & HAL_I2C_ERROR_TIMEOUT) == HAL_I2C_ERROR_TIMEOUT)) {
-        ret = I2C_TIMEOUT;
+    // Master Receiver
+    case TW_MR_DATA_ACK: // data received, ack sent
+      // put byte into buffer
+      twi_masterBuffer[twi_masterBufferIndex++] = TWDR;
+      __attribute__ ((fallthrough));
+    case TW_MR_SLA_ACK:  // address sent, ack received
+      // ack if more bytes are expected, otherwise nack
+      if(twi_masterBufferIndex < twi_masterBufferLength){
+        twi_reply(1);
+      }else{
+        twi_reply(0);
+      }
+      break;
+    case TW_MR_DATA_NACK: // data received, nack sent
+      // put final byte into buffer
+      twi_masterBuffer[twi_masterBufferIndex++] = TWDR;
+      if (twi_sendStop){
+        twi_stop();
       } else {
-        if ((err & HAL_I2C_ERROR_AF) == HAL_I2C_ERROR_AF) {
-          ret = I2C_NACK_DATA;
-        } else if (err != HAL_I2C_ERROR_NONE) {
-          ret = I2C_ERROR;
-        }
+        twi_inRepStart = true;	// we're gonna send the START
+        // don't enable the interrupt. We'll generate the start, but we
+        // avoid handling the interrupt until we're in the next transaction,
+        // at the point where we would normally issue the start.
+        TWCR = _BV(TWINT) | _BV(TWSTA)| _BV(TWEN) ;
+        twi_state = TWI_READY;
       }
-    }
-  }
-  return ret;
-}
+      break;
+    case TW_MR_SLA_NACK: // address sent, nack received
+      twi_stop();
+      break;
+    // TW_MR_ARB_LOST handled by TW_MT_ARB_LOST case
 
-/**
-  * @brief  Write bytes to master
-  * @param  obj : pointer to i2c_t structure
-  * @param  data: pointer to data to be write
-  * @param  size: number of bytes to be write.
-  * @retval status
-  */
-i2c_status_e i2c_slave_write_IT(i2c_t *obj, uint8_t *data, uint16_t size)
-{
-  uint8_t i = 0;
-  i2c_status_e ret = I2C_OK;
-
-  // Protection to not override the TxBuffer
-  if (size > I2C_TXRX_BUFFER_SIZE) {
-    ret = I2C_DATA_TOO_LONG;
-  } else {
-    // Check the communication status
-    for (i = 0; i < size; i++) {
-      obj->i2cTxRxBuffer[i] = *(data + i);
-    }
-
-    obj->i2cTxRxBufferSize = size;
-  }
-  return ret;
-}
-
-/**
-  * @brief  read bytes in master mode at a given address
-  * @param  obj : pointer to i2c_t structure
-  * @param  dev_address: specifies the address of the device.
-  * @param  data: pointer to data to be read
-  * @param  size: number of bytes to be read.
-  * @retval read status
-  */
-i2c_status_e i2c_master_read(i2c_t *obj, uint8_t dev_address, uint8_t *data, uint16_t size)
-{
-  i2c_status_e ret = I2C_OK;
-  uint32_t tickstart = HAL_GetTick();
-  uint32_t delta = 0;
-  uint32_t err = 0;
-
-#if defined(I2C_OTHER_FRAME)
-  uint32_t XferOptions = obj->handle.XferOptions; // save XferOptions value, because handle can be modified by HAL, which cause issue in case of NACK from slave
-#endif
-
-#if defined(I2C_OTHER_FRAME)
-  if (HAL_I2C_Master_Seq_Receive_IT(&(obj->handle), dev_address, data, size, XferOptions) == HAL_OK) {
-#else
-  if (HAL_I2C_Master_Receive_IT(&(obj->handle), dev_address, data, size) == HAL_OK) {
-#endif
-    // wait for transfer completion
-    while ((HAL_I2C_GetState(&(obj->handle)) != HAL_I2C_STATE_READY) && (delta < I2C_TIMEOUT_TICK)) {
-      delta = (HAL_GetTick() - tickstart);
-      if (HAL_I2C_GetError(&(obj->handle)) != HAL_I2C_ERROR_NONE) {
-        break;
+    // Slave Receiver
+    case TW_SR_SLA_ACK:   // addressed, returned ack
+    case TW_SR_GCALL_ACK: // addressed generally, returned ack
+    case TW_SR_ARB_LOST_SLA_ACK:   // lost arbitration, returned ack
+    case TW_SR_ARB_LOST_GCALL_ACK: // lost arbitration, returned ack
+      // enter slave receiver mode
+      twi_state = TWI_SRX;
+      // indicate that rx buffer can be overwritten and ack
+      twi_rxBufferIndex = 0;
+      twi_reply(1);
+      break;
+    case TW_SR_DATA_ACK:       // data received, returned ack
+    case TW_SR_GCALL_DATA_ACK: // data received generally, returned ack
+      // if there is still room in the rx buffer
+      if(twi_rxBufferIndex < TWI_BUFFER_LENGTH){
+        // put byte in buffer and ack
+        twi_rxBuffer[twi_rxBufferIndex++] = TWDR;
+        twi_reply(1);
+      }else{
+        // otherwise nack
+        twi_reply(0);
       }
-    }
-
-    err = HAL_I2C_GetError(&(obj->handle));
-    if ((delta >= I2C_TIMEOUT_TICK)
-        || ((err & HAL_I2C_ERROR_TIMEOUT) == HAL_I2C_ERROR_TIMEOUT)) {
-      ret = I2C_TIMEOUT;
-    } else {
-      if ((err & HAL_I2C_ERROR_AF) == HAL_I2C_ERROR_AF) {
-        ret = I2C_NACK_DATA;
-      } else if (err != HAL_I2C_ERROR_NONE) {
-        ret = I2C_ERROR;
+      break;
+    case TW_SR_STOP: // stop or repeated start condition received
+      // ack future responses and leave slave receiver state
+      twi_releaseBus();
+      // put a null char after data if there's room
+      if(twi_rxBufferIndex < TWI_BUFFER_LENGTH){
+        twi_rxBuffer[twi_rxBufferIndex] = '\0';
       }
-    }
-  }
-  return ret;
-}
+      // callback to user defined callback
+      twi_onSlaveReceive(twi_rxBuffer, twi_rxBufferIndex);
+      // since we submit rx buffer to "wire" library, we can reset it
+      twi_rxBufferIndex = 0;
+      break;
+    case TW_SR_DATA_NACK:       // data received, returned nack
+    case TW_SR_GCALL_DATA_NACK: // data received generally, returned nack
+      // nack back at master
+      twi_reply(0);
+      break;
+    
+    // Slave Transmitter
+    case TW_ST_SLA_ACK:          // addressed, returned ack
+    case TW_ST_ARB_LOST_SLA_ACK: // arbitration lost, returned ack
+      // enter slave transmitter mode
+      twi_state = TWI_STX;
+      // ready the tx buffer index for iteration
+      twi_txBufferIndex = 0;
+      // set tx buffer length to be zero, to verify if user changes it
+      twi_txBufferLength = 0;
+      // request for txBuffer to be filled and length to be set
+      // note: user must call twi_transmit(bytes, length) to do this
+      twi_onSlaveTransmit();
+      // if they didn't change buffer & length, initialize it
+      if(0 == twi_txBufferLength){
+        twi_txBufferLength = 1;
+        twi_txBuffer[0] = 0x00;
+      }
+      __attribute__ ((fallthrough));		  
+      // transmit first byte from buffer, fall
+    case TW_ST_DATA_ACK: // byte sent, ack returned
+      // copy data to output register
+      TWDR = twi_txBuffer[twi_txBufferIndex++];
+      // if there is more to send, ack, otherwise nack
+      if(twi_txBufferIndex < twi_txBufferLength){
+        twi_reply(1);
+      }else{
+        twi_reply(0);
+      }
+      break;
+    case TW_ST_DATA_NACK: // received nack, we are done 
+    case TW_ST_LAST_DATA: // received ack, but we are done already!
+      // ack future responses
+      twi_reply(1);
+      // leave slave receiver state
+      twi_state = TWI_READY;
+      break;
 
-/**
-  * @brief  Checks if target device is ready for communication
-  * @param  obj : pointer to i2c_t structure
-  * @param  devAddr: specifies the address of the device.
-  * @param  trials : Number of trials.
-  * @retval status
-  */
-i2c_status_e i2c_IsDeviceReady(i2c_t *obj, uint8_t devAddr, uint32_t trials)
-{
-  i2c_status_e ret = I2C_OK;
-
-  switch (HAL_I2C_IsDeviceReady(&(obj->handle), devAddr, trials, I2C_TIMEOUT_TICK)) {
-    case HAL_OK:
-      ret = I2C_OK;
+    // All
+    case TW_NO_INFO:   // no state information
       break;
-    case HAL_TIMEOUT:
-      ret = (obj->handle.State != HAL_I2C_STATE_READY) ? I2C_TIMEOUT : I2C_NACK_ADDR;
-      break;
-    case HAL_BUSY:
-      ret = (obj->handle.State != HAL_I2C_STATE_READY) ? I2C_BUSY : I2C_NACK_ADDR;
-      break;
-    default:
-      ret = (obj->handle.State != HAL_I2C_STATE_READY) ? I2C_ERROR : I2C_NACK_ADDR;
+    case TW_BUS_ERROR: // bus error, illegal stop/start
+      twi_error = TW_BUS_ERROR;
+      twi_stop();
       break;
   }
-  return ret;
 }
-
-/* Aim of the function is to get i2c_s pointer using hi2c pointer */
-/* Highly inspired from magical linux kernel's "container_of" */
-/* (which was not directly used since not compatible with IAR toolchain) */
-i2c_t *get_i2c_obj(I2C_HandleTypeDef *hi2c)
-{
-  struct i2c_s *obj_s;
-  i2c_t *obj;
-
-  obj_s = (struct i2c_s *)((char *)hi2c - offsetof(struct i2c_s, handle));
-  obj = (i2c_t *)((char *)obj_s - offsetof(i2c_t, i2c));
-
-  return (obj);
-}
-
-/** @brief  sets function called before a slave read operation
-  * @param  obj : pointer to i2c_t structure
-  * @param  function: callback function to use
-  * @retval None
-  */
-void i2c_attachSlaveRxEvent(i2c_t *obj, void (*function)(i2c_t *))
-{
-  if ((obj != NULL) && (function != NULL)) {
-    obj->i2c_onSlaveReceive = function;
-    HAL_I2C_EnableListen_IT(&(obj->handle));
-  }
-}
-
-/** @brief  sets function called before a slave write operation
-  * @param  obj : pointer to i2c_t structure
-  * @param  function: callback function to use
-  * @retval None
-  */
-void i2c_attachSlaveTxEvent(i2c_t *obj, void (*function)(i2c_t *))
-{
-  if ((obj != NULL) && (function != NULL)) {
-    obj->i2c_onSlaveTransmit = function;
-    HAL_I2C_EnableListen_IT(&(obj->handle));
-  }
-}
-
-/**
-  * @brief  Slave Address Match callback.
-  * @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains
-  *                the configuration information for the specified I2C.
-  * @param  TransferDirection: Master request Transfer Direction (Write/Read), value of @ref I2C_XferOptions_definition
-  * @param  AddrMatchCode: Address Match Code
-  * @retval None
-  */
-void HAL_I2C_AddrCallback(I2C_HandleTypeDef *hi2c, uint8_t TransferDirection, uint16_t AddrMatchCode)
-{
-  i2c_t *obj = get_i2c_obj(hi2c);
-
-  if (AddrMatchCode == hi2c->Init.OwnAddress1) {
-    if (TransferDirection == I2C_DIRECTION_RECEIVE) {
-      obj->slaveMode = SLAVE_MODE_TRANSMIT;
-
-      if (obj->i2c_onSlaveTransmit != NULL) {
-        obj->i2c_onSlaveTransmit(obj);
-      }
-#if defined(STM32F0xx) || defined(STM32F1xx) || defined(STM32F2xx) || defined(STM32F3xx) ||\
-    defined(STM32F4xx) || defined(STM32L0xx) || defined(STM32L1xx) || defined(STM32MP1xx)
-      HAL_I2C_Slave_Seq_Transmit_IT(hi2c, (uint8_t *) obj->i2cTxRxBuffer,
-                                    obj->i2cTxRxBufferSize, I2C_LAST_FRAME);
-#else
-      HAL_I2C_Slave_Sequential_Transmit_IT(hi2c, (uint8_t *) obj->i2cTxRxBuffer,
-                                           obj->i2cTxRxBufferSize, I2C_LAST_FRAME);
-#endif
-    } else {
-      obj->slaveRxNbData = 0;
-      obj->slaveMode = SLAVE_MODE_RECEIVE;
-      /*  We don't know in advance how many bytes will be sent by master so
-       *  we'll fetch one by one until master ends the sequence */
-#if defined(STM32F0xx) || defined(STM32F1xx) || defined(STM32F2xx) || defined(STM32F3xx) ||\
-    defined(STM32F4xx) || defined(STM32L0xx) || defined(STM32L1xx) || defined(STM32MP1xx)
-      HAL_I2C_Slave_Seq_Receive_IT(hi2c, (uint8_t *) & (obj->i2cTxRxBuffer[obj->slaveRxNbData]),
-                                   1, I2C_NEXT_FRAME);
-#else
-      HAL_I2C_Slave_Sequential_Receive_IT(hi2c, (uint8_t *) & (obj->i2cTxRxBuffer[obj->slaveRxNbData]),
-                                          1, I2C_NEXT_FRAME);
-#endif
-    }
-  }
-}
-
-/**
-  * @brief  Listen Complete callback.
-  * @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains
-  *                the configuration information for the specified I2C.
-  * @retval None
-  */
-void HAL_I2C_ListenCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-  i2c_t *obj = get_i2c_obj(hi2c);
-
-  /*  Previous master transaction now ended, so inform upper layer if needed
-   *  then prepare for listening to next request */
-  if ((obj->slaveMode == SLAVE_MODE_RECEIVE) && (obj->slaveRxNbData != 0)) {
-    obj->i2c_onSlaveReceive(obj);
-  }
-  obj->slaveMode = SLAVE_MODE_LISTEN;
-  obj->slaveRxNbData = 0;
-  HAL_I2C_EnableListen_IT(hi2c);
-}
-
-/**
-  * @brief Slave RX complete callback
-  * @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains
-  *                the configuration information for the specified I2C.
-  * @retval None
-  */
-void HAL_I2C_SlaveRxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-  i2c_t *obj = get_i2c_obj(hi2c);
-  /* One more byte was received, store it then prepare next */
-  if (obj->slaveRxNbData < I2C_TXRX_BUFFER_SIZE) {
-    obj->slaveRxNbData++;
-  } else {
-    core_debug("ERROR: I2C Slave RX overflow\n");
-  }
-  /* Restart interrupt mode for next Byte */
-  if (obj->slaveMode == SLAVE_MODE_RECEIVE) {
-#if defined(STM32F0xx) || defined(STM32F1xx) || defined(STM32F2xx) || defined(STM32F3xx) ||\
-    defined(STM32F4xx) || defined(STM32L0xx) || defined(STM32L1xx) || defined(STM32MP1xx)
-    HAL_I2C_Slave_Seq_Receive_IT(hi2c, (uint8_t *) & (obj->i2cTxRxBuffer[obj->slaveRxNbData]),
-                                 1, I2C_NEXT_FRAME);
-#else
-    HAL_I2C_Slave_Sequential_Receive_IT(hi2c, (uint8_t *) & (obj->i2cTxRxBuffer[obj->slaveRxNbData]),
-                                        1, I2C_NEXT_FRAME);
-#endif
-  }
-}
-
-/**
-  * @brief Slave TX complete callback
-  * @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains
-  *                the configuration information for the specified I2C.
-  * @retval None
-  */
-void HAL_I2C_SlaveTxCpltCallback(I2C_HandleTypeDef *hi2c)
-{
-  i2c_t *obj = get_i2c_obj(hi2c);
-  /* Reset transmit buffer size */
-  obj->i2cTxRxBufferSize = 0;
-}
-
-/**
-  * @brief  I2C error callback.
-  * @note   In master mode, the callback is not used because the error is reported
-  *         to the Arduino API from i2c_master_write() and i2c_master_read().
-  *         In slave mode, there is no mechanism in Arduino API to report an error
-  *         so the error callback forces the slave to listen again.
-  * @param  hi2c Pointer to a I2C_HandleTypeDef structure that contains
-  *                the configuration information for the specified I2C.
-  * @retval None
-  */
-void HAL_I2C_ErrorCallback(I2C_HandleTypeDef *hi2c)
-{
-  i2c_t *obj = get_i2c_obj(hi2c);
-
-  if (obj->isMaster == 0) {
-    HAL_I2C_EnableListen_IT(hi2c);
-  }
-}
-
-#if defined(I2C1_BASE)
-/**
-* @brief  This function handles I2C1 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C1_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C1_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-#if defined(STM32F0xx) || defined(STM32G0xx) || defined(STM32L0xx)
-  HAL_I2C_ER_IRQHandler(handle);
-#endif /* STM32F0xx || STM32G0xx || STM32L0xx */
-}
-
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-/**
-* @brief  This function handles I2C1 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C1_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C1_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-#endif // I2C1_BASE
-
-#if defined(I2C2_BASE)
-/**
-* @brief  This function handles I2C2 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C2_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C2_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-#if defined(STM32F0xx) || defined(STM32G0xx) || defined(STM32L0xx)
-  HAL_I2C_ER_IRQHandler(handle);
-#endif /* STM32F0xx || STM32G0xx || STM32L0xx */
-}
-
-#if !defined(STM32F0xx) && !defined(STM32G0xx) && !defined(STM32L0xx)
-/**
-* @brief  This function handles I2C2 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C2_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C2_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif /* !STM32F0xx && !STM32G0xx && !STM32L0xx */
-#endif // I2C2_BASE
-
-#if defined(I2C3_BASE)
-/**
-* @brief  This function handles I2C3 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C3_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C3_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-#if defined(STM32L0xx)
-  HAL_I2C_ER_IRQHandler(handle);
-#endif /* STM32L0xx */
-}
-
-#if !defined(STM32L0xx)
-/**
-* @brief  This function handles I2C3 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C3_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C3_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif /* !STM32L0xx */
-#endif // I2C3_BASE
-
-#if defined(I2C4_BASE)
-/**
-* @brief  This function handles I2C4 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C4_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C4_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-  HAL_I2C_ER_IRQHandler(handle);
-}
-
-/**
-* @brief  This function handles I2C4 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C4_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C4_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif // I2C4_BASE
-
-#if defined(I2C5_BASE)
-/**
-* @brief  This function handles I2C5 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C5_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C5_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-}
-
-/**
-* @brief  This function handles I2C5 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C5_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C5_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif // I2C5_BASE
-
-#if defined(I2C6_BASE)
-/**
-* @brief  This function handles I2C6 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C6_EV_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C6_INDEX];
-  HAL_I2C_EV_IRQHandler(handle);
-}
-
-/**
-* @brief  This function handles I2C6 interrupt.
-* @param  None
-* @retval None
-*/
-void I2C6_ER_IRQHandler(void)
-{
-  I2C_HandleTypeDef *handle = i2c_handles[I2C6_INDEX];
-  HAL_I2C_ER_IRQHandler(handle);
-}
-#endif // I2C6_BASE
-
-#ifdef __cplusplus
-}
-#endif
-
-/************************ (C) COPYRIGHT STMicroelectronics *****END OF FILE****/

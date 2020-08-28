@@ -17,79 +17,47 @@
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
 
   Modified 2012 by Todd Krein (todd@krein.org) to implement repeated starts
+  Modified 2020 by Greyson Christoforo (grey@christoforo.net) to implement timeouts
 */
 
 #ifndef TwoWire_h
 #define TwoWire_h
 
+#include <inttypes.h>
 #include "Stream.h"
-#include "Arduino.h"
-extern "C" {
-#include "utility/twi.h"
-}
 
 #define BUFFER_LENGTH 32
-
-#define MASTER_ADDRESS 0x33
 
 // WIRE_HAS_END means Wire has end()
 #define WIRE_HAS_END 1
 
-class TwoWire : public Stream {
+class TwoWire : public Stream
+{
   private:
-    uint8_t *rxBuffer;
-    uint8_t rxBufferAllocated;
-    uint8_t rxBufferIndex;
-    uint8_t rxBufferLength;
+    static uint8_t rxBuffer[];
+    static uint8_t rxBufferIndex;
+    static uint8_t rxBufferLength;
 
-    uint8_t txAddress;
-    uint8_t *txBuffer;
-    uint8_t txBufferAllocated;
-    uint8_t txBufferIndex;
-    uint8_t txBufferLength;
+    static uint8_t txAddress;
+    static uint8_t txBuffer[];
+    static uint8_t txBufferIndex;
+    static uint8_t txBufferLength;
 
-    uint8_t transmitting;
-
-    uint8_t ownAddress;
-    i2c_t _i2c;
-
-    void (*user_onRequest)(void);
-    void (*user_onReceive)(int);
-    static void onRequestService(i2c_t *);
-    static void onReceiveService(i2c_t *);
-
-    void allocateRxBuffer(size_t length);
-    void allocateTxBuffer(size_t length);
-
-    void resetRxBuffer(void);
-    void resetTxBuffer(void);
-
+    static uint8_t transmitting;
+    static void (*user_onRequest)(void);
+    static void (*user_onReceive)(int);
+    static void onRequestService(void);
+    static void onReceiveService(uint8_t*, int);
   public:
     TwoWire();
-    TwoWire(uint8_t sda, uint8_t scl);
-    // setSCL/SDA have to be called before begin()
-    void setSCL(uint32_t scl)
-    {
-      _i2c.scl = digitalPinToPinName(scl);
-    };
-    void setSDA(uint32_t sda)
-    {
-      _i2c.sda = digitalPinToPinName(sda);
-    };
-    void setSCL(PinName scl)
-    {
-      _i2c.scl = scl;
-    };
-    void setSDA(PinName sda)
-    {
-      _i2c.sda = sda;
-    };
-    void begin(bool generalCall = false);
-    void begin(uint8_t, uint8_t);
-    void begin(uint8_t, bool generalCall = false);
-    void begin(int, bool generalCall = false);
+    void begin();
+    void begin(uint8_t);
+    void begin(int);
     void end();
     void setClock(uint32_t);
+    void setWireTimeout(uint32_t timeout = 25000, bool reset_with_timeout = false);
+    bool getWireTimeoutFlag(void);
+    void clearWireTimeoutFlag(void);
     void beginTransmission(uint8_t);
     void beginTransmission(int);
     uint8_t endTransmission(void);
@@ -105,30 +73,17 @@ class TwoWire : public Stream {
     virtual int read(void);
     virtual int peek(void);
     virtual void flush(void);
-    void onReceive(void (*)(int));
-    void onRequest(void (*)(void));
+    void onReceive( void (*)(int) );
+    void onRequest( void (*)(void) );
 
-    inline size_t write(unsigned long n)
-    {
-      return write((uint8_t)n);
-    }
-    inline size_t write(long n)
-    {
-      return write((uint8_t)n);
-    }
-    inline size_t write(unsigned int n)
-    {
-      return write((uint8_t)n);
-    }
-    inline size_t write(int n)
-    {
-      return write((uint8_t)n);
-    }
+    inline size_t write(unsigned long n) { return write((uint8_t)n); }
+    inline size_t write(long n) { return write((uint8_t)n); }
+    inline size_t write(unsigned int n) { return write((uint8_t)n); }
+    inline size_t write(int n) { return write((uint8_t)n); }
     using Print::write;
 };
-
-
 
 extern TwoWire Wire;
 
 #endif
+

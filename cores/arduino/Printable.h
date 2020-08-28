@@ -30,9 +30,10 @@ class Print;
     Print::print and Print::println methods.
 */
 
-class Printable {
+class Printable
+{
   public:
-    virtual size_t printTo(Print &p) const = 0;
+    virtual size_t printTo(Print& p) const = 0;
 };
 
 #endif

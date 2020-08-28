@@ -1,5 +1,8 @@
 /*
-  Copyright (c) 2011 Arduino.  All right reserved.
+  wiring_shift.c - shiftOut() function
+  Part of Arduino - http://www.arduino.cc/
+
+  Copyright (c) 2005-2006 David A. Mellis
 
   This library is free software; you can redistribute it and/or
   modify it under the terms of the GNU Lesser General Public
@@ -8,56 +11,46 @@
 
   This library is distributed in the hope that it will be useful,
   but WITHOUT ANY WARRANTY; without even the implied warranty of
-  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
-  See the GNU Lesser General Public License for more details.
+  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU
+  Lesser General Public License for more details.
 
-  You should have received a copy of the GNU Lesser General Public
-  License along with this library; if not, write to the Free Software
-  Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
+  You should have received a copy of the GNU Lesser General
+  Public License along with this library; if not, write to the
+  Free Software Foundation, Inc., 59 Temple Place, Suite 330,
+  Boston, MA  02111-1307  USA
 */
 
-#include "Arduino.h"
+#include "wiring_private.h"
 
-#ifdef __cplusplus
-extern "C" {
-#endif
+uint8_t shiftIn(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder) {
+	uint8_t value = 0;
+	uint8_t i;
 
-uint32_t shiftIn(uint32_t ulDataPin, uint32_t ulClockPin, uint32_t ulBitOrder)
-{
-  uint8_t value = 0 ;
-  uint8_t i ;
-
-  for (i = 0 ; i < 8 ; ++i) {
-    digitalWrite(ulClockPin, HIGH) ;
-
-    if (ulBitOrder == LSBFIRST) {
-      value |= digitalRead(ulDataPin) << i ;
-    } else {
-      value |= digitalRead(ulDataPin) << (7 - i) ;
-    }
-
-    digitalWrite(ulClockPin, LOW) ;
-  }
-
-  return value ;
+	for (i = 0; i < 8; ++i) {
+		digitalWrite(clockPin, HIGH);
+		if (bitOrder == LSBFIRST)
+			value |= digitalRead(dataPin) << i;
+		else
+			value |= digitalRead(dataPin) << (7 - i);
+		digitalWrite(clockPin, LOW);
+	}
+	return value;
 }
 
-void shiftOut(uint32_t ulDataPin, uint32_t ulClockPin, uint32_t ulBitOrder, uint32_t ulVal)
+void shiftOut(uint8_t dataPin, uint8_t clockPin, uint8_t bitOrder, uint8_t val)
 {
-  uint8_t i ;
+	uint8_t i;
 
-  for (i = 0 ; i < 8 ; i++) {
-    if (ulBitOrder == LSBFIRST) {
-      digitalWrite(ulDataPin, !!(ulVal & (1 << i))) ;
-    } else {
-      digitalWrite(ulDataPin, !!(ulVal & (1 << (7 - i)))) ;
-    }
-
-    digitalWrite(ulClockPin, HIGH) ;
-    digitalWrite(ulClockPin, LOW) ;
-  }
+	for (i = 0; i < 8; i++)  {
+		if (bitOrder == LSBFIRST) {
+			digitalWrite(dataPin, val & 1);
+			val >>= 1;
+		} else {	
+			digitalWrite(dataPin, (val & 128) != 0);
+			val <<= 1;
+		}
+			
+		digitalWrite(clockPin, HIGH);
+		digitalWrite(clockPin, LOW);		
+	}
 }
-
-#ifdef __cplusplus
-} // extern "C"
-#endif

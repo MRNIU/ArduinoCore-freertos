@@ -15,381 +15,138 @@
   You should have received a copy of the GNU Lesser General Public
   License along with this library; if not, write to the Free Software
   Foundation, Inc., 51 Franklin St, Fifth Floor, Boston, MA  02110-1301  USA
-
+  
   Modified 23 November 2006 by David A. Mellis
   Modified 28 September 2010 by Mark Sproul
   Modified 14 August 2012 by Alarus
   Modified 3 December 2013 by Matthijs Kooijman
 */
 
+#include <stdlib.h>
 #include <stdio.h>
+#include <string.h>
+#include <inttypes.h>
+#include <util/atomic.h>
 #include "Arduino.h"
+
 #include "HardwareSerial.h"
+#include "HardwareSerial_private.h"
 
-#if defined(HAL_UART_MODULE_ENABLED) && !defined(HAL_UART_MODULE_ONLY)
-#if defined(HAVE_HWSERIAL1) || defined(HAVE_HWSERIAL2) || defined(HAVE_HWSERIAL3) ||\
-  defined(HAVE_HWSERIAL4) || defined(HAVE_HWSERIAL5) || defined(HAVE_HWSERIAL6) ||\
-  defined(HAVE_HWSERIAL7) || defined(HAVE_HWSERIAL8) || defined(HAVE_HWSERIAL9) ||\
-  defined(HAVE_HWSERIAL10) || defined(HAVE_HWSERIALLP1)
-  // SerialEvent functions are weak, so when the user doesn't define them,
-  // the linker just sets their address to 0 (which is checked below).
-  #if defined(HAVE_HWSERIAL1)
-    HardwareSerial Serial1(USART1);
-    void serialEvent1() __attribute__((weak));
-  #endif
+// this next line disables the entire HardwareSerial.cpp, 
+// this is so I can support Attiny series and any other chip without a uart
+#if defined(HAVE_HWSERIAL0) || defined(HAVE_HWSERIAL1) || defined(HAVE_HWSERIAL2) || defined(HAVE_HWSERIAL3)
 
-  #if defined(HAVE_HWSERIAL2)
-    HardwareSerial Serial2(USART2);
-    void serialEvent2() __attribute__((weak));
-  #endif
+// SerialEvent functions are weak, so when the user doesn't define them,
+// the linker just sets their address to 0 (which is checked below).
+// The Serialx_available is just a wrapper around Serialx.available(),
+// but we can refer to it weakly so we don't pull in the entire
+// HardwareSerial instance if the user doesn't also refer to it.
+#if defined(HAVE_HWSERIAL0)
+  void serialEvent() __attribute__((weak));
+  bool Serial0_available() __attribute__((weak));
+#endif
 
-  #if defined(HAVE_HWSERIAL3)
-    HardwareSerial Serial3(USART3);
-    void serialEvent3() __attribute__((weak));
-  #endif
+#if defined(HAVE_HWSERIAL1)
+  void serialEvent1() __attribute__((weak));
+  bool Serial1_available() __attribute__((weak));
+#endif
 
-  #if defined(HAVE_HWSERIAL4)
-    #if defined(USART4)
-      HardwareSerial Serial4(USART4);
-    #else
-      HardwareSerial Serial4(UART4);
-    #endif
-    void serialEvent4() __attribute__((weak));
-  #endif
+#if defined(HAVE_HWSERIAL2)
+  void serialEvent2() __attribute__((weak));
+  bool Serial2_available() __attribute__((weak));
+#endif
 
-  #if defined(HAVE_HWSERIAL5)
-    #if defined(USART5)
-      HardwareSerial Serial5(USART5);
-    #else
-      HardwareSerial Serial5(UART5);
-    #endif
-    void serialEvent5() __attribute__((weak));
-  #endif
+#if defined(HAVE_HWSERIAL3)
+  void serialEvent3() __attribute__((weak));
+  bool Serial3_available() __attribute__((weak));
+#endif
 
-  #if defined(HAVE_HWSERIAL6)
-    HardwareSerial Serial6(USART6);
-    void serialEvent6() __attribute__((weak));
-  #endif
-
-  #if defined(HAVE_HWSERIAL7)
-    #if defined(USART7)
-      HardwareSerial Serial7(USART7);
-    #else
-      HardwareSerial Serial7(UART7);
-    #endif
-    void serialEvent7() __attribute__((weak));
-  #endif
-
-  #if defined(HAVE_HWSERIAL8)
-    #if defined(USART8)
-      HardwareSerial Serial8(USART8);
-    #else
-      HardwareSerial Serial8(UART8);
-    #endif
-    void serialEvent8() __attribute__((weak));
-  #endif
-
-  #if defined(HAVE_HWSERIAL9)
-    HardwareSerial Serial9(UART9);
-    void serialEvent9() __attribute__((weak));
-  #endif
-
-  #if defined(HAVE_HWSERIAL10)
-    HardwareSerial Serial10(UART10);
-    void serialEvent10() __attribute__((weak));
-  #endif
-
-  #if defined(HAVE_HWSERIALLP1)
-    HardwareSerial SerialLP1(LPUART1);
-    void serialEventLP1() __attribute__((weak));
-  #endif
-#endif // HAVE_HWSERIALx
-
-// Constructors ////////////////////////////////////////////////////////////////
-HardwareSerial::HardwareSerial(uint32_t _rx, uint32_t _tx)
+void serialEventRun(void)
 {
-  init(digitalPinToPinName(_rx), digitalPinToPinName(_tx));
+#if defined(HAVE_HWSERIAL0)
+  if (Serial0_available && serialEvent && Serial0_available()) serialEvent();
+#endif
+#if defined(HAVE_HWSERIAL1)
+  if (Serial1_available && serialEvent1 && Serial1_available()) serialEvent1();
+#endif
+#if defined(HAVE_HWSERIAL2)
+  if (Serial2_available && serialEvent2 && Serial2_available()) serialEvent2();
+#endif
+#if defined(HAVE_HWSERIAL3)
+  if (Serial3_available && serialEvent3 && Serial3_available()) serialEvent3();
+#endif
 }
 
-HardwareSerial::HardwareSerial(PinName _rx, PinName _tx)
-{
-  init(_rx, _tx);
-}
-
-HardwareSerial::HardwareSerial(void *peripheral, HalfDuplexMode_t halfDuplex)
-{
-  // If PIN_SERIALy_RX is not defined assume half-duplex
-  _serial.pin_rx = NC;
-  // If Serial is defined in variant set
-  // the Rx/Tx pins for com port if defined
-#if defined(Serial) && defined(PIN_SERIAL_TX)
-  if ((void *)this == (void *)&Serial) {
-#if defined(PIN_SERIAL_RX)
-    setRx(PIN_SERIAL_RX);
+// macro to guard critical sections when needed for large TX buffer sizes
+#if (SERIAL_TX_BUFFER_SIZE>256)
+#define TX_BUFFER_ATOMIC ATOMIC_BLOCK(ATOMIC_RESTORESTATE)
+#else
+#define TX_BUFFER_ATOMIC
 #endif
-    setTx(PIN_SERIAL_TX);
-  } else
-#endif
-#if defined(PIN_SERIAL1_TX) && defined(USART1_BASE)
-    if (peripheral == USART1) {
-#if defined(PIN_SERIAL1_RX)
-      setRx(PIN_SERIAL1_RX);
-#endif
-      setTx(PIN_SERIAL1_TX);
-    } else
-#endif
-#if defined(PIN_SERIAL2_TX) && defined(USART2_BASE)
-      if (peripheral == USART2) {
-#if defined(PIN_SERIAL2_RX)
-        setRx(PIN_SERIAL2_RX);
-#endif
-        setTx(PIN_SERIAL2_TX);
-      } else
-#endif
-#if defined(PIN_SERIAL3_TX) && defined(USART3_BASE)
-        if (peripheral == USART3) {
-#if defined(PIN_SERIAL3_RX)
-          setRx(PIN_SERIAL3_RX);
-#endif
-          setTx(PIN_SERIAL3_TX);
-        } else
-#endif
-#if defined(PIN_SERIAL4_TX) &&\
-   (defined(USART4_BASE) || defined(UART4_BASE))
-#if defined(USART4_BASE)
-          if (peripheral == USART4)
-#elif defined(UART4_BASE)
-          if (peripheral == UART4)
-#endif
-          {
-#if defined(PIN_SERIAL4_RX)
-            setRx(PIN_SERIAL4_RX);
-#endif
-            setTx(PIN_SERIAL4_TX);
-          } else
-#endif
-#if defined(PIN_SERIAL5_TX) &&\
-   (defined(USART5_BASE) || defined(UART5_BASE))
-#if defined(USART5_BASE)
-            if (peripheral == USART5)
-#elif defined(UART5_BASE)
-            if (peripheral == UART5)
-#endif
-            {
-#if defined(PIN_SERIAL5_RX)
-              setRx(PIN_SERIAL5_RX);
-#endif
-              setTx(PIN_SERIAL5_TX);
-            } else
-#endif
-#if defined(PIN_SERIAL6_TX) && defined(USART6_BASE)
-              if (peripheral == USART6) {
-#if defined(PIN_SERIAL6_RX)
-                setRx(PIN_SERIAL6_RX);
-#endif
-                setTx(PIN_SERIAL6_TX);
-              } else
-#endif
-#if defined(PIN_SERIAL7_TX) &&\
-   (defined(USART7_BASE) || defined(UART7_BASE))
-#if defined(USART7_BASE)
-                if (peripheral == USART7)
-#elif defined(UART7_BASE)
-                if (peripheral == UART7)
-#endif
-                {
-#if defined(PIN_SERIAL7_RX)
-                  setRx(PIN_SERIAL7_RX);
-#endif
-                  setTx(PIN_SERIAL7_TX);
-                } else
-#endif
-#if defined(PIN_SERIAL8_TX) &&\
-   (defined(USART8_BASE) || defined(UART8_BASE))
-#if defined(USART8_BASE)
-                  if (peripheral == USART8)
-#elif defined(UART8_BASE)
-                  if (peripheral == UART8)
-#endif
-                  {
-#if defined(PIN_SERIAL8_RX)
-                    setRx(PIN_SERIAL8_RX);
-#endif
-                    setTx(PIN_SERIAL8_TX);
-                  } else
-#endif
-#if defined(PIN_SERIAL9_TX) && defined(UART9)
-                    if (peripheral == UART9) {
-#if defined(PIN_SERIAL9_RX)
-                      setRx(PIN_SERIAL9_RX);
-#endif
-                      setTx(PIN_SERIAL9_TX);
-                    } else
-#endif
-#if defined(PIN_SERIAL10_TX) && defined(UART10)
-                      if (peripheral == UART10) {
-#if defined(PIN_SERIAL10_RX)
-                        setRx(PIN_SERIAL10_RX);
-#endif
-                        setTx(PIN_SERIAL10_TX);
-                      } else
-#endif
-#if defined(PIN_SERIALLP1_TX) && defined(LPUART1_BASE)
-                        if (peripheral == LPUART1) {
-#if defined(PIN_SERIALLP1_RX)
-                          setRx(PIN_SERIALLP1_RX);
-#endif
-                          setTx(PIN_SERIALLP1_TX);
-                        } else
-#endif
-                          // else get the pins of the first peripheral occurence in PinMap
-                        {
-                          _serial.pin_rx = pinmap_pin(peripheral, PinMap_UART_RX);
-                          _serial.pin_tx = pinmap_pin(peripheral, PinMap_UART_TX);
-                        }
-  if (halfDuplex == HALF_DUPLEX_ENABLED) {
-    _serial.pin_rx = NC;
-  }
-  init(_serial.pin_rx, _serial.pin_tx);
-}
-
-HardwareSerial::HardwareSerial(uint32_t _rxtx)
-{
-  init(NC, digitalPinToPinName(_rxtx));
-}
-
-HardwareSerial::HardwareSerial(PinName _rxtx)
-{
-  init(NC, _rxtx);
-}
-
-void HardwareSerial::init(PinName _rx, PinName _tx)
-{
-  if (_rx == _tx) {
-    _serial.pin_rx = NC;
-  } else {
-    _serial.pin_rx = _rx;
-  }
-  _serial.pin_tx = _tx;
-  _serial.rx_buff = _rx_buffer;
-  _serial.rx_head = 0;
-  _serial.rx_tail = 0;
-  _serial.tx_buff = _tx_buffer;
-  _serial.tx_head = 0;
-  _serial.tx_tail = 0;
-}
-
-void HardwareSerial::configForLowPower(void)
-{
-#if defined(HAL_PWR_MODULE_ENABLED) && defined(UART_IT_WUF)
-  // Reconfigure properly Serial instance to use HSI as clock source
-  end();
-  uart_config_lowpower(&_serial);
-  begin(_baud, _config);
-#endif
-}
 
 // Actual interrupt handlers //////////////////////////////////////////////////////////////
 
-void HardwareSerial::_rx_complete_irq(serial_t *obj)
-{
-  // No Parity error, read byte and store it in the buffer if there is room
-  unsigned char c;
-
-  if (uart_getc(obj, &c) == 0) {
-
-    rx_buffer_index_t i = (unsigned int)(obj->rx_head + 1) % SERIAL_RX_BUFFER_SIZE;
-
-    // if we should be storing the received character into the location
-    // just before the tail (meaning that the head would advance to the
-    // current location of the tail), we're about to overflow the buffer
-    // and so we don't write the character or advance the head.
-    if (i != obj->rx_tail) {
-      obj->rx_buff[obj->rx_head] = c;
-      obj->rx_head = i;
-    }
-  }
-}
-
-// Actual interrupt handlers //////////////////////////////////////////////////////////////
-
-int HardwareSerial::_tx_complete_irq(serial_t *obj)
+void HardwareSerial::_tx_udr_empty_irq(void)
 {
   // If interrupts are enabled, there must be more data in the output
   // buffer. Send the next byte
-  obj->tx_tail = (obj->tx_tail + 1) % SERIAL_TX_BUFFER_SIZE;
+  unsigned char c = _tx_buffer[_tx_buffer_tail];
+  _tx_buffer_tail = (_tx_buffer_tail + 1) % SERIAL_TX_BUFFER_SIZE;
 
-  if (obj->tx_head == obj->tx_tail) {
-    return -1;
+  *_udr = c;
+
+  // clear the TXC bit -- "can be cleared by writing a one to its bit
+  // location". This makes sure flush() won't return until the bytes
+  // actually got written. Other r/w bits are preserved, and zeroes
+  // written to the rest.
+
+#ifdef MPCM0
+  *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << MPCM0))) | (1 << TXC0);
+#else
+  *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << TXC0)));
+#endif
+
+  if (_tx_buffer_head == _tx_buffer_tail) {
+    // Buffer empty, so disable interrupts
+    cbi(*_ucsrb, UDRIE0);
   }
-
-  return 0;
 }
 
 // Public Methods //////////////////////////////////////////////////////////////
 
 void HardwareSerial::begin(unsigned long baud, byte config)
 {
-  uint32_t databits = 0;
-  uint32_t stopbits = 0;
-  uint32_t parity = 0;
+  // Try u2x mode first
+  uint16_t baud_setting = (F_CPU / 4 / baud - 1) / 2;
+  *_ucsra = 1 << U2X0;
 
-  _baud = baud;
-  _config = config;
-
-  // Manage databits
-  switch (config & 0x07) {
-    case 0x02:
-      databits = 6;
-      break;
-    case 0x04:
-      databits = 7;
-      break;
-    case 0x06:
-      databits = 8;
-      break;
-    default:
-      databits = 0;
-      break;
+  // hardcoded exception for 57600 for compatibility with the bootloader
+  // shipped with the Duemilanove and previous boards and the firmware
+  // on the 8U2 on the Uno and Mega 2560. Also, The baud_setting cannot
+  // be > 4095, so switch back to non-u2x mode if the baud rate is too
+  // low.
+  if (((F_CPU == 16000000UL) && (baud == 57600)) || (baud_setting >4095))
+  {
+    *_ucsra = 0;
+    baud_setting = (F_CPU / 8 / baud - 1) / 2;
   }
 
-  if ((config & 0x30) == 0x30) {
-    parity = UART_PARITY_ODD;
-    databits++;
-  } else if ((config & 0x20) == 0x20) {
-    parity = UART_PARITY_EVEN;
-    databits++;
-  } else {
-    parity = UART_PARITY_NONE;
-  }
+  // assign the baud_setting, a.k.a. ubrr (USART Baud Rate Register)
+  *_ubrrh = baud_setting >> 8;
+  *_ubrrl = baud_setting;
 
-  if ((config & 0x08) == 0x08) {
-    stopbits = UART_STOPBITS_2;
-  } else {
-    stopbits = UART_STOPBITS_1;
-  }
+  _written = false;
 
-  switch (databits) {
-#ifdef UART_WORDLENGTH_7B
-    case 7:
-      databits = UART_WORDLENGTH_7B;
-      break;
+  //set the data bits, parity, and stop bits
+#if defined(__AVR_ATmega8__)
+  config |= 0x80; // select UCSRC register (shared with UBRRH)
 #endif
-    case 8:
-      databits = UART_WORDLENGTH_8B;
-      break;
-    case 9:
-      databits = UART_WORDLENGTH_9B;
-      break;
-    default:
-    case 0:
-      Error_Handler();
-      break;
-  }
-
-  uart_init(&_serial, (uint32_t)baud, databits, parity, stopbits);
-  enableHalfDuplexRx();
-  uart_attach_rx_callback(&_serial, _rx_complete_irq);
+  *_ucsrc = config;
+  
+  sbi(*_ucsrb, RXEN0);
+  sbi(*_ucsrb, TXEN0);
+  sbi(*_ucsrb, RXCIE0);
+  cbi(*_ucsrb, UDRIE0);
 }
 
 void HardwareSerial::end()
@@ -397,47 +154,51 @@ void HardwareSerial::end()
   // wait for transmission of outgoing data
   flush();
 
-  uart_deinit(&_serial);
-
+  cbi(*_ucsrb, RXEN0);
+  cbi(*_ucsrb, TXEN0);
+  cbi(*_ucsrb, RXCIE0);
+  cbi(*_ucsrb, UDRIE0);
+  
   // clear any received data
-  _serial.rx_head = _serial.rx_tail;
+  _rx_buffer_head = _rx_buffer_tail;
 }
 
 int HardwareSerial::available(void)
 {
-  return ((unsigned int)(SERIAL_RX_BUFFER_SIZE + _serial.rx_head - _serial.rx_tail)) % SERIAL_RX_BUFFER_SIZE;
+  return ((unsigned int)(SERIAL_RX_BUFFER_SIZE + _rx_buffer_head - _rx_buffer_tail)) % SERIAL_RX_BUFFER_SIZE;
 }
 
 int HardwareSerial::peek(void)
 {
-  if (_serial.rx_head == _serial.rx_tail) {
+  if (_rx_buffer_head == _rx_buffer_tail) {
     return -1;
   } else {
-    return _serial.rx_buff[_serial.rx_tail];
+    return _rx_buffer[_rx_buffer_tail];
   }
 }
 
 int HardwareSerial::read(void)
 {
-  enableHalfDuplexRx();
   // if the head isn't ahead of the tail, we don't have any characters
-  if (_serial.rx_head == _serial.rx_tail) {
+  if (_rx_buffer_head == _rx_buffer_tail) {
     return -1;
   } else {
-    unsigned char c = _serial.rx_buff[_serial.rx_tail];
-    _serial.rx_tail = (rx_buffer_index_t)(_serial.rx_tail + 1) % SERIAL_RX_BUFFER_SIZE;
+    unsigned char c = _rx_buffer[_rx_buffer_tail];
+    _rx_buffer_tail = (rx_buffer_index_t)(_rx_buffer_tail + 1) % SERIAL_RX_BUFFER_SIZE;
     return c;
   }
 }
 
 int HardwareSerial::availableForWrite(void)
 {
-  tx_buffer_index_t head = _serial.tx_head;
-  tx_buffer_index_t tail = _serial.tx_tail;
+  tx_buffer_index_t head;
+  tx_buffer_index_t tail;
 
-  if (head >= tail) {
-    return SERIAL_TX_BUFFER_SIZE - 1 - head + tail;
+  TX_BUFFER_ATOMIC {
+    head = _tx_buffer_head;
+    tail = _tx_buffer_tail;
   }
+  if (head >= tail) return SERIAL_TX_BUFFER_SIZE - 1 - head + tail;
   return tail - head - 1;
 }
 
@@ -446,12 +207,16 @@ void HardwareSerial::flush()
   // If we have never written a byte, no need to flush. This special
   // case is needed since there is no way to force the TXC (transmit
   // complete) bit to 1 during initialization
-  if (!_written) {
+  if (!_written)
     return;
-  }
 
-  while ((_serial.tx_head != _serial.tx_tail)) {
-    // nop, the interrupt handler will free up space for us
+  while (bit_is_set(*_ucsrb, UDRIE0) || bit_is_clear(*_ucsra, TXC0)) {
+    if (bit_is_clear(SREG, SREG_I) && bit_is_set(*_ucsrb, UDRIE0))
+	// Interrupts are globally disabled, but the DR empty
+	// interrupt should be enabled, so poll the DR empty flag to
+	// prevent deadlock
+	if (bit_is_set(*_ucsra, UDRE0))
+	  _tx_udr_empty_irq();
   }
   // If we get here, nothing is queued anymore (DRIE is disabled) and
   // the hardware finished tranmission (TXC is set).
@@ -460,72 +225,57 @@ void HardwareSerial::flush()
 size_t HardwareSerial::write(uint8_t c)
 {
   _written = true;
-  if (isHalfDuplex()) {
-    if (_rx_enabled) {
-      _rx_enabled = false;
-      uart_enable_tx(&_serial);
+  // If the buffer and the data register is empty, just write the byte
+  // to the data register and be done. This shortcut helps
+  // significantly improve the effective datarate at high (>
+  // 500kbit/s) bitrates, where interrupt overhead becomes a slowdown.
+  if (_tx_buffer_head == _tx_buffer_tail && bit_is_set(*_ucsra, UDRE0)) {
+    // If TXC is cleared before writing UDR and the previous byte
+    // completes before writing to UDR, TXC will be set but a byte
+    // is still being transmitted causing flush() to return too soon.
+    // So writing UDR must happen first.
+    // Writing UDR and clearing TC must be done atomically, otherwise
+    // interrupts might delay the TXC clear so the byte written to UDR
+    // is transmitted (setting TXC) before clearing TXC. Then TXC will
+    // be cleared when no bytes are left, causing flush() to hang
+    ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+      *_udr = c;
+#ifdef MPCM0
+      *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << MPCM0))) | (1 << TXC0);
+#else
+      *_ucsra = ((*_ucsra) & ((1 << U2X0) | (1 << TXC0)));
+#endif
+    }
+    return 1;
+  }
+  tx_buffer_index_t i = (_tx_buffer_head + 1) % SERIAL_TX_BUFFER_SIZE;
+	
+  // If the output buffer is full, there's nothing for it other than to 
+  // wait for the interrupt handler to empty it a bit
+  while (i == _tx_buffer_tail) {
+    if (bit_is_clear(SREG, SREG_I)) {
+      // Interrupts are disabled, so we'll have to poll the data
+      // register empty flag ourselves. If it is set, pretend an
+      // interrupt has happened and call the handler to free up
+      // space for us.
+      if(bit_is_set(*_ucsra, UDRE0))
+	_tx_udr_empty_irq();
+    } else {
+      // nop, the interrupt handler will free up space for us
     }
   }
 
-  tx_buffer_index_t i = (_serial.tx_head + 1) % SERIAL_TX_BUFFER_SIZE;
+  _tx_buffer[_tx_buffer_head] = c;
 
-  // If the output buffer is full, there's nothing for it other than to
-  // wait for the interrupt handler to empty it a bit
-  while (i == _serial.tx_tail) {
-    // nop, the interrupt handler will free up space for us
+  // make atomic to prevent execution of ISR between setting the
+  // head pointer and setting the interrupt flag resulting in buffer
+  // retransmission
+  ATOMIC_BLOCK(ATOMIC_RESTORESTATE) {
+    _tx_buffer_head = i;
+    sbi(*_ucsrb, UDRIE0);
   }
-
-  _serial.tx_buff[_serial.tx_head] = c;
-  _serial.tx_head = i;
-
-  if (!serial_tx_active(&_serial)) {
-    uart_attach_tx_callback(&_serial, _tx_complete_irq);
-  }
-
+  
   return 1;
 }
 
-void HardwareSerial::setRx(uint32_t _rx)
-{
-  _serial.pin_rx = digitalPinToPinName(_rx);
-}
-
-void HardwareSerial::setTx(uint32_t _tx)
-{
-  _serial.pin_tx = digitalPinToPinName(_tx);
-}
-
-void HardwareSerial::setRx(PinName _rx)
-{
-  _serial.pin_rx = _rx;
-}
-
-void HardwareSerial::setTx(PinName _tx)
-{
-  _serial.pin_tx = _tx;
-}
-
-void HardwareSerial::setHalfDuplex(void)
-{
-  _serial.pin_rx = NC;
-}
-
-bool HardwareSerial::isHalfDuplex(void) const
-{
-  return _serial.pin_rx == NC;
-}
-
-void HardwareSerial::enableHalfDuplexRx(void)
-{
-  if (isHalfDuplex()) {
-    // In half-duplex mode we have to wait for all TX characters to
-    // be transmitted before we can receive data.
-    flush();
-    if (!_rx_enabled) {
-      _rx_enabled = true;
-      uart_enable_rx(&_serial);
-    }
-  }
-}
-
-#endif // HAL_UART_MODULE_ENABLED && !HAL_UART_MODULE_ONLY
+#endif // whole file
