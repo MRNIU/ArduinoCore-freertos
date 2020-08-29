@@ -14,7 +14,7 @@
 
 - FreeRTOS for Portenta H7
 - FreeRTOS for Arduino AVR
-- STM32H747 for Arduino_Core_STM32
+- STM32H747 for Arduino_Core_STM32(Portenta H7)
 
 ## TODO
 
@@ -24,9 +24,8 @@
 ## Others
 
 [Weekly Report](https://forum.arduino.cc/index.php?topic=687113.0)
-[Arduino_Core_STM32](https://github.com/MRNIU/Arduino_Core_STM32)
+[Arduino_Core_STM32/PortentaH7](https://github.com/MRNIU/Arduino_Core_STM32/tree/PortentaH7)
 [FreeRTOS-PortentaH7](https://github.com/MRNIU/FreeRTOS-PortentaH7)
-[ArduinoCore-freertos](https://github.com/MRNIU/ArduinoCore-freertos)
-[ArduinoCore-freertos(AVR)](https://github.com/MRNIU/ArduinoCore-freertos/tree/avr)
-[ArduinoCore-freertos(H7)](https://github.com/MRNIU/ArduinoCore-freertos/tree/stm32)
+[ArduinoCore-freertos/AVR](https://github.com/MRNIU/ArduinoCore-freertos/tree/avr)
+[ArduinoCore-freertos/H7](https://github.com/MRNIU/ArduinoCore-freertos/tree/stm32)
 
