@@ -27,5 +27,5 @@
 [Arduino_Core_STM32/PortentaH7](https://github.com/MRNIU/Arduino_Core_STM32/tree/PortentaH7)
 [FreeRTOS-PortentaH7](https://github.com/MRNIU/FreeRTOS-PortentaH7)
 [ArduinoCore-freertos/AVR](https://github.com/MRNIU/ArduinoCore-freertos/tree/avr)
-[ArduinoCore-freertos/H7](https://github.com/MRNIU/ArduinoCore-freertos/tree/stm32)
+[ArduinoCore-freertos/PortentaH7](https://github.com/MRNIU/ArduinoCore-freertos/tree/PortentaH7)
 
