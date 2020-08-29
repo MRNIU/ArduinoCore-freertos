@@ -55,9 +55,9 @@ build.bootloader_flags=
 build.ldscript=ldscript.ld
 
 # These can be overridden in platform.local.txt
-compiler.c.extra_flags={compiler.mbed.extra_defines} {compiler.mbed.c.extra_flags}
-compiler.c.elf.extra_flags={compiler.mbed.c.elf.extra_flags}
-compiler.cpp.extra_flags={compiler.mbed.extra_defines} {compiler.mbed.cpp.extra_flags}
+compiler.c.extra_flags={compiler.ph7.extra_defines} {compiler.ph7.c.extra_flags}
+compiler.c.elf.extra_flags={compiler.ph7.c.elf.extra_flags}
+compiler.cpp.extra_flags={compiler.ph7.extra_defines} {compiler.ph7.cpp.extra_flags}
 compiler.cpp.std=gnu++14
 compiler.S.extra_flags={build.startup_file}
 compiler.ar.extra_flags=
