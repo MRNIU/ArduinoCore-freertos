@@ -24,8 +24,11 @@
 ## Others
 
 [Weekly Report](https://forum.arduino.cc/index.php?topic=687113.0)
-[Arduino_Core_STM32/PortentaH7](https://github.com/MRNIU/Arduino_Core_STM32/tree/PortentaH7)
-[FreeRTOS-PortentaH7](https://github.com/MRNIU/FreeRTOS-PortentaH7)
-[ArduinoCore-freertos/AVR](https://github.com/MRNIU/ArduinoCore-freertos/tree/avr)
-[ArduinoCore-freertos/PortentaH7](https://github.com/MRNIU/ArduinoCore-freertos/tree/PortentaH7)
 
+[Arduino_Core_STM32/PortentaH7](https://github.com/MRNIU/Arduino_Core_STM32/tree/PortentaH7)
+
+[FreeRTOS-PortentaH7](https://github.com/MRNIU/FreeRTOS-PortentaH7)
+
+[ArduinoCore-freertos/AVR](https://github.com/MRNIU/ArduinoCore-freertos/tree/avr)
+
+[ArduinoCore-freertos/PortentaH7](https://github.com/MRNIU/ArduinoCore-freertos/tree/PortentaH7)
