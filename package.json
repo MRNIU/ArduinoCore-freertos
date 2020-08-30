@@ -1,5 +1,5 @@
 {
-    "name": "ArduinoCore-PortentaH7",
+    "name": "ArduinoCore-freertos(PortentaH7)",
     "description": "Arduino Core for PortentaH7",
     "version": "0.0.0",
     "url": "https://github.com/MRNIU/ArduinoCore-freertos/tree/PortentaH7"
