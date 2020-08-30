@@ -18,6 +18,8 @@
 */
 
 #include <Arduino.h>
+#include "FreeRTOS/include/FreeRTOS.h"
+#include "FreeRTOS/include/task.h"
 
 // Declared weak in Arduino.h to allow user redefinitions.
 int atexit(void (* /*func*/ )()) { return 0; }
@@ -39,14 +41,13 @@ int main(void)
 #if defined(USBCON)
 	USBDevice.attach();
 #endif
-	
+
 	setup();
-    
+
 	for (;;) {
 		loop();
 		if (serialEventRun) serialEventRun();
 	}
-        
+
 	return 0;
 }
-
